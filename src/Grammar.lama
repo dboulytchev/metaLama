@@ -1,0 +1,82 @@
+import List;
+import Ostap;
+import Matcher;
+import Fun;
+
+-- Entry reference
+publicfun entry (name, level) {
+  Entry ([name, level])
+}
+
+public fun primary (parser) {
+  Primary (parser)
+}
+
+-- Creates an empty named grammar
+public fun createGrammar (name) {
+  [name, {}]
+}
+
+public fun addGroup ([grammarName, entries], name) {
+  -- Check if a group with the given name exists
+  [grammarName, [name, {["start", {}]}] : entries]
+}
+
+public fun addEntry ([grammarName, entries], group, level, expr) {
+  let entries =
+    map (fun (g@[groupName, groupLevels]) {
+           if group = groupName
+           then
+	     let levels =
+	       foldr (fun (levels, entry@[levelName, levelExprs]) {
+                 case level of
+  	           At (name) ->
+	             if levelName = name
+	             then [levelName, expr : levelExprs]
+	             else entry 
+	             fi : levels
+	         | Before (name, newName) ->
+	             if levelName = name
+	             then {[newName, {expr}], entry} 
+	             else {entry}
+	             fi +++ levels
+	         | After (name, newName) ->
+	             if levelName = name
+	             then {entry, [newName, {expr}]}  
+	             else {entry}
+	             fi +++ levels
+	         esac
+               },
+	       {},
+	       groupLevels)
+	     in
+	     [groupName, levels]
+	 else g
+	 fi
+       },
+       entries)
+  in
+  [grammarName, entries]
+}
+
+fun lookup ([grammarName, entries], [entry, level]) {
+  case find (fun ([name, _]) {name = entry}, entries) of
+    Some ([_, levels]) ->
+      case find (fun ([name, _]) {name = level}, levels) of
+        Some ([_, {expr}]) -> expr  
+      | None               -> failure (sprintf ("level %s was not found", level))
+      esac
+  | None -> failure (sprintf ("entry %s was not found in grammar %s", entry, grammarName))
+  esac
+}
+
+public fun makeParser (g, expr) {
+  case expr of
+    Primary (p)    -> p 
+  | Empty          -> empty
+  | Alt     (l, r) -> alt (g.makeParser (l), g.makeParser (r))
+  | Seq     (l, r) -> seq (g.makeParser (l), lift $ g.makeParser (r))
+  | Entry   (e)    -> g.makeParser (g.lookup (e))
+  esac
+}
+  

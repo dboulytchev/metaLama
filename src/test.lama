@@ -1,0 +1,9 @@
+import Grammar;
+
+let g = createGrammar ("test") in
+let g = g.addGroup ("a") in
+let g = g.addEntry ("a", At ("start"), Primary (token ("a"))) in
+printf ("%s\n", g.string);
+let p = g.makeParser (entry ("a", "start")) in
+printf ("%s\n", p.string);
+printf ("%s\n", parseString (p |> fun (x) {eof @ lift (x)}, "a").string)
