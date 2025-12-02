@@ -1,4 +1,5 @@
 import Grammar;
+import Ostap;
 
 let g = createGrammar ("test") in
 let g = g.addGroup ("a") in

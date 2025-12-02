@@ -4,7 +4,7 @@ import Matcher;
 import Fun;
 
 -- Entry reference
-publicfun entry (name, level) {
+public fun entry (name, level) {
   Entry ([name, level])
 }
 

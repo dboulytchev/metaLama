@@ -6,15 +6,13 @@ LAMAC=lamac
 
 .PHONY: all clean
 
-all: Grammar.o Test.o
-	$(LAMAC) -I . -o test $<
-
-test.o: Grammar.o
+all: Grammar.o 
+	$(LAMAC) -I . -o Test Test.lama
 
 %.o: %.lama
 	$(LAMAC) -I . -c $<
 
 
 clean:
-	rm -Rf *.s *.o *.i *~ *.html *.sm test
+	rm -Rf *.s *.o *.i *~ *.html *.sm Test
 
