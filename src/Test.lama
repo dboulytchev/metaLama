@@ -4,22 +4,53 @@ import Lexer;
 
 fun test () {
   let g = createGrammar ("test") in
-  let g = g.addGroup ("expr") in
-  let g = g.addEntry ("expr", At ("start"), syntax (x=decimal {Const (stringInt (x))}            |
-                                                    x=lident  {Var (x)}                          |
-                                                    -s["("] $(g.entry ("expr", "start")) -s[")"]
-				  	           ))
+  let g = addGroup (g, "expr") in
+  let g = addEntry (g, "expr", After ("start", "primary"), eta syntax (x=decimal {Const (stringInt (x))}             |
+                                                                       x=lident  {Var (x)}                           |
+                                                                       -s["("] $(entry (g, "expr", "start")) -s[")"] |
+								       kIf c=$(entry (g, "expr", "start"))
+								         kThen e=$(entry (g, "expr", "start"))
+									 kElse t=$(entry (g, "expr", "start"))
+								       kFi {If (c, e, t)}
+			  	  	                              ))
   in
-  (*
-  let g = g.addEntry ("expr", At ("start"), syntax (token["a"] |
-                                                    $(g.entry ("expr", "start"))
-  						    token["+"]
-						    $(g.entry ("expr", "start"))
-						   ))
-  in*)
---  let p = g.entry ("expr", "start") in
-  printf ("%s\n", parseString (syntax ($(g.entry ("expr", "start")) -eof), "(3)").string)
-  --printf ("%s\n", parseString (p |> fun (x) {eof @ lift (x)}, "a").string)
+  let g = addEntry (g, "expr", After ("start", "*"), eta syntax (l=$(entry (g, "expr", "*")) op=(s["*"] |
+                                                                                             s["/"] |
+											     s["%"]
+                                                                                            )
+			                                         r=$(entry (g, "expr", "primary")) {Binop (op, l, r)} |
+							         $(entry (g, "expr", "primary"))
+                                                                ))
+  in
+  let g = addEntry (g, "expr", After ("start", "+"), eta syntax (l=$(entry (g, "expr", "+")) op=(s["+"] |
+                                                                                                 s["-"]
+                                                                                                )
+			                                         r=$(entry (g, "expr", "*")) {Binop (op, l, r)} |
+							         $(entry (g, "expr", "*"))
+                                                                ))
+  in
+  let g = addEntry (g, "expr", After ("start", "=="), eta syntax ($(entry (g, "expr", "+")) |
+                                                                  l=$(entry (g, "expr", "+")) op=(s["=="] |
+				 	                                                          s["<>"] |
+						                                                  s["<="] |
+								  		                  s["<" ] |
+								  		                  s[">="] |
+										                  s[">" ]
+						                                                 )
+						                  r=$(entry (g, "expr", "+")) {Binop (op, l, r)}
+                                                                 ))
+                                                  						   
+  in  
+  let g = addEntry (g, "expr", After ("start", "&&"), eta syntax ($(entry (g, "expr", "==")) |
+                                                                  l=$(entry (g, "expr", "==")) op=s["&&"] r=$(entry (g, "expr", "&&")) {Binop (op, l, r)}
+                                                                 ))                                                  						   
+  in
+  let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", "&&")) |
+                                                         l=$(entry (g, "expr", "start")) op=s["!!"] r=$(entry (g, "expr", "&&")) {Binop (op, l, r)}
+                                                        ))
+                                                  						   
+  in 
+  printf ("%s\n", parseString (syntax ($(entry (g, "expr", "start")) -eof), "if 3!!2&&1<>4+3*2 then 4 else x fi + 7").string)
 }
 
 test ()
