@@ -6,7 +6,7 @@ LAMAC=lamac
 
 .PHONY: all clean
 
-all: Grammar.o 
+all: Grammar.o Lexer.o
 	$(LAMAC) -I . -o Test Test.lama
 
 %.o: %.lama

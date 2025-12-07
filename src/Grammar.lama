@@ -2,47 +2,42 @@ import List;
 import Ostap;
 import Matcher;
 import Fun;
-
--- Entry reference
-public fun entry (name, level) {
-  Entry ([name, level])
-}
-
-public fun primary (parser) {
-  Primary (parser)
-}
+import Ref;
 
 -- Creates an empty named grammar
 public fun createGrammar (name) {
-  [name, {}]
+  ref ([name, {}])
 }
 
-public fun addGroup ([grammarName, entries], name) {
+public fun addGroup (grammar, name) {
   -- Check if a group with the given name exists
-  [grammarName, [name, {["start", {}]}] : entries]
+  let [grammarName, entries] = deref (grammar) in
+  grammar ::= [grammarName, [name, {["start", empty]}] : entries];
+  grammar
 }
 
-public fun addEntry ([grammarName, entries], group, level, expr) {
+public fun addEntry (grammar, group, level, expr) {
+  let [grammarName, entries] = deref (grammar) in
   let entries =
     map (fun (g@[groupName, groupLevels]) {
            if group = groupName
            then
 	     let levels =
-	       foldr (fun (levels, entry@[levelName, levelExprs]) {
+	       foldr (fun (levels, entry@[levelName, levelParser]) {
                  case level of
   	           At (name) ->
 	             if levelName = name
-	             then [levelName, expr : levelExprs]
+	             then [levelName, alt (expr, levelParser)]
 	             else entry 
 	             fi : levels
 	         | Before (name, newName) ->
 	             if levelName = name
-	             then {[newName, {expr}], entry} 
+	             then {[newName, expr], entry} 
 	             else {entry}
 	             fi +++ levels
 	         | After (name, newName) ->
 	             if levelName = name
-	             then {entry, [newName, {expr}]}  
+	             then {entry, [newName, expr]}  
 	             else {entry}
 	             fi +++ levels
 	         esac
@@ -56,27 +51,19 @@ public fun addEntry ([grammarName, entries], group, level, expr) {
        },
        entries)
   in
-  [grammarName, entries]
+  grammar ::= [grammarName, entries];
+  grammar
 }
 
-fun lookup ([grammarName, entries], [entry, level]) {
+public fun entry (grammar, entry, level) {
+  let [grammarName, entries] = deref (grammar) in
   case find (fun ([name, _]) {name = entry}, entries) of
     Some ([_, levels]) ->
       case find (fun ([name, _]) {name = level}, levels) of
-        Some ([_, {expr}]) -> expr  
-      | None               -> failure (sprintf ("level %s was not found", level))
+        Some ([_, expr]) -> expr  
+      | None             -> failure (sprintf ("level %s was not found", level))
       esac
   | None -> failure (sprintf ("entry %s was not found in grammar %s", entry, grammarName))
-  esac
-}
-
-public fun makeParser (g, expr) {
-  case expr of
-    Primary (p)    -> p 
-  | Empty          -> empty
-  | Alt     (l, r) -> alt (g.makeParser (l), g.makeParser (r))
-  | Seq     (l, r) -> seq (g.makeParser (l), lift $ g.makeParser (r))
-  | Entry   (e)    -> g.makeParser (g.lookup (e))
   esac
 }
   

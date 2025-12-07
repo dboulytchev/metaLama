@@ -1,10 +1,25 @@
 import Grammar;
 import Ostap;
+import Lexer;
 
-let g = createGrammar ("test") in
-let g = g.addGroup ("a") in
-let g = g.addEntry ("a", At ("start"), Primary (token ("a"))) in
-printf ("%s\n", g.string);
-let p = g.makeParser (entry ("a", "start")) in
-printf ("%s\n", p.string);
-printf ("%s\n", parseString (p |> fun (x) {eof @ lift (x)}, "a").string)
+fun test () {
+  let g = createGrammar ("test") in
+  let g = g.addGroup ("expr") in
+  let g = g.addEntry ("expr", At ("start"), syntax (x=decimal {Const (stringInt (x))}            |
+                                                    x=lident  {Var (x)}                          |
+                                                    -s["("] $(g.entry ("expr", "start")) -s[")"]
+				  	           ))
+  in
+  (*
+  let g = g.addEntry ("expr", At ("start"), syntax (token["a"] |
+                                                    $(g.entry ("expr", "start"))
+  						    token["+"]
+						    $(g.entry ("expr", "start"))
+						   ))
+  in*)
+--  let p = g.entry ("expr", "start") in
+  printf ("%s\n", parseString (syntax ($(g.entry ("expr", "start")) -eof), "(3)").string)
+  --printf ("%s\n", parseString (p |> fun (x) {eof @ lift (x)}, "a").string)
+}
+
+test ()
