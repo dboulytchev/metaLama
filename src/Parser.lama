@@ -1,0 +1,66 @@
+-- Parser 
+
+import Ostap;
+import Lexer;
+import List;
+import Fun;
+import Matcher;
+import Ref;
+import Collection;
+import Grammar;
+
+-- -- Signals an error; takes an error message and location info
+public fun error (msg, loc) {
+  failure ("%s at %d:%d\n", msg, loc.fst, loc.snd)
+}
+
+fun inbr (l, p, r) {
+  syntax (-l p -r)
+}
+
+fun constructParser () {
+  let g = createGrammar ("test") in
+  let g = addGroup (g, "expr") in
+  let g = addEntry (g, "expr", After ("start", "primary"), eta syntax (x=decimal {Const (stringInt (x))}             |
+                                                                       x=lident  {Var (x)}                           |
+                                                                       inbr[s("("), syntax($(entry (g, "expr", "start"))), s(")")] |
+ 
+                    kRead x=inbr[s("("), lident, s(")")] { Read (x) } |
+                    kWrite e=inbr[s("("), syntax($(entry (g, "expr", "start"))), s(")")] { Write (e) } |
+
+  						      kIf c=$(entry (g, "expr", "start"))
+  						        kThen e=$(entry (g, "expr", "start"))
+  									kElse t=$(entry (g, "expr", "start"))
+    						      kFi {If (c, e, t)}))
+  in
+  let g = addEntry (g, "expr", After ("start", "*"), eta syntax (l=$(entry (g, "expr", "*")) op=(s["*"] |
+                                                                                                 s["/"] |
+  									                                                                             s["%"])
+  			                                                         r=$(entry (g, "expr", "primary")) {Binop (op, l, r)} |
+  							                                                   $(entry (g, "expr", "primary"))))
+  in
+  let g = addEntry (g, "expr", After ("start", "+"), eta syntax (l=$(entry (g, "expr", "+")) op=(s["+"] |
+                                                                                               s["-"])
+  			                                                         r=$(entry (g, "expr", "*")) {Binop (op, l, r)} |
+  							                                                   $(entry (g, "expr", "*"))))
+  in
+  let g = addEntry (g, "expr", After ("start", "=="), eta syntax ($(entry (g, "expr", "+")) |
+                                                                l=$(entry (g, "expr", "+")) op=(s["=="] |
+  				 	                                                                                    s["!="] |
+                                                                                                s["<="] |
+  								  		                                                                        s["<" ] |
+  								  		                                                                        s[">="] |
+  										                                                                          s[">" ])
+  						                                                  r=$(entry (g, "expr", "+")) {Binop (op, l, r)})) 
+  in  
+  let g = addEntry (g, "expr", After ("start", "&&"), eta syntax ($(entry (g, "expr", "==")) |
+                                                                l=$(entry (g, "expr", "==")) op=s["&&"] r=$(entry (g, "expr", "&&")) {Binop (op, l, r)}))                                                  						   
+  in
+  let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", "&&")) |
+                                                       l=$(entry (g, "expr", "start")) op=s["!!"] r=$(entry (g, "expr", "&&")) {Binop (op, l, r)}))
+  in 
+  syntax ($(entry (g, "expr", "start")))
+}
+
+-- Public top-level parser
+public parse = constructParser ();

@@ -6,13 +6,23 @@ LAMAC=lamac
 
 .PHONY: all clean
 
-all: Grammar.o Lexer.o
-	$(LAMAC) -I . -o Test Test.lama
+all: Parser.o Lexer.o Grammar.o X86_64.o SM.o Manifest.o
+	$(LAMAC) -I . -o lama-impl Driver.lama
+
+Parser.o: Lexer.o Grammar.o
+
+Expr.o: State.o
+
+SM.o: State.o World.o Expr.o
+
+X86_64.o: SM.o Manifest.o
 
 %.o: %.lama
 	$(LAMAC) -I . -c $<
 
+variate:
+	for f in $(FILES) ; do cp $$f $$f~ ; cat $$f~ | awk 'BEGIN {skip=0; show=1} $$0 ~ /End \*\)/ {show=1; skip=1} $$0 ~ /\(\* Assignment/ {show=1; skip=1} $$0 ~ /\(\* Implementation/ {show=0; skip=1} {if (! skip && show) print $$0; skip = 0}' > $$f ; done
 
 clean:
-	rm -Rf *.s *.o *.i *~ *.html *.sm Test
+	rm -Rf *.s *.o *.i *~ *.html *.sm lama-impl
 
