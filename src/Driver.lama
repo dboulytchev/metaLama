@@ -75,6 +75,7 @@ var args = parseArgs (arrayList (sysargs).tl);
 -- code generator
 case parseString (parse |> bypass (end), fread (args.getInFile)) of
   Succ (program) ->
+    let program = program (Void) in
     case args.getMode of
       Comp -> compileX86 (args, peepSM (args, compileSM (program)))
     | mode ->

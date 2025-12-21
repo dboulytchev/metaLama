@@ -1,0 +1,57 @@
+	.global	main
+	.data
+global_x0:	.quad	0
+global_x1:	.quad	0
+global_y:	.quad	0
+	.text
+main:
+	pushq	%rbp
+	movq	%rsp,	%rbp
+	subq	$0,	%rsp
+# READ
+	call	Lread
+	movq	%rax,	%rbx
+# ST x0
+	movq	%rbx,	global_x0(%rip)
+# DROP
+# READ
+	call	Lread
+	movq	%rax,	%rbx
+# ST x1
+	movq	%rbx,	global_x1(%rip)
+# DROP
+# LDA y
+	leaq	global_y(%rip),	%rbx
+# LD x0
+	movq	global_x0(%rip),	%rcx
+# CONST 28
+	movq	$28,	%rsi
+# CONST 34
+	movq	$34,	%rdi
+# LD x1
+	movq	global_x1(%rip),	%r8
+# BINOP +
+	addq	%r8,	%rdi
+	movq	%rdi,	%rdi
+# BINOP /
+	movq	%rsi,	%rax
+	pushq	%rdx
+	cqto
+	idivq	%rdi
+	movq	%rax,	%rsi
+	popq	%rdx
+# BINOP +
+	addq	%rsi,	%rcx
+	movq	%rcx,	%rcx
+# STI
+	movq	%rcx,	(%rbx)
+# DROP
+# LD y
+	movq	global_y(%rip),	%rbx
+# WRITE
+	movq	%rbx,	%rdi
+	call	Lwrite
+	movq	%rbp,	%rsp
+	popq	%rbp
+	xorq	%rax,	%rax
+	ret

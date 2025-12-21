@@ -212,11 +212,6 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
     esac
   }
 
-  fun freeReg (R (i)) {
-    size(stack) <= i  
-  }
-
-
   [envString,
    allocate,
    push,
@@ -230,8 +225,7 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
    isBarrier,
    setBarrier,
    setStack,
-   retrieveStack,
-   freeReg]
+   retrieveStack]
 }
 
 -- Exported accessors
@@ -289,10 +283,6 @@ fun setStack (env, l) {
 
 fun retrieveStack (env, l) {
   env [13] (l)
-}
-
-fun freeReg (env, r) {
-  env [14] (r)
 }
 
 -- Creates an initial environment
@@ -371,16 +361,6 @@ fun suffix (op) {
   esac
 }
 
--- Enframes a rdx-using code with save/restore
--- if RDX is occupied
-fun withRDX (env, code) {
-  if freeReg(env, rdx)
-  then code  
-  else singletonBuffer (Push (rdx)) <+> code <+ Pop (rdx)
-  fi
-}
-
-
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
@@ -409,104 +389,101 @@ fun compile (env, code) {
           case env.allocate of
             [s, env] -> [env, code <+> move (L (n), s)]
           esac
-      | BINOP (op) -> let [s1, s2, env] = pop2(env) in
-                      let [s, env] = allocate(env) in
-                      let code = code in
-        case op of
-          "&&" -> [env, code <+> move (L (0), rax) <+
-                                 Binop ("cmp", rax, s1) <+ 
-                                 Set ("ne", "%al") <+> 
-                                 move (rax, s1) <+> 
-                                 move (L (0), rax) <+ 
-                                 Binop ("cmp", rax, s2) <+ 
-                                 Set ("ne", "%al") <+> 
-                                 move (rax, s2) <+ 
-                                 Binop (op, s1, s2) <+>
-                                 move (s2, s)]
-
-        | "!!" -> [env, code <+> move (L (0), rax) <+
-                                 Binop ("cmp", rax, s1) <+ 
-                                 Set ("ne", "%al") <+> 
-                                 move (rax, s1) <+> 
-                                 move (L (0), rax) <+ 
-                                 Binop ("cmp", rax, s2) <+ 
-                                 Set ("ne", "%al") <+> 
-                                 move (rax, s2) <+ 
-                                 Binop (op, s1, s2) <+>
-                                 move (s2, s)]
-        | "/"  -> [env, case s1 of
-               R (2) -> code <+> move (s2, rax) <+> 
-                                 move (rdx, rbx) <+ 
-                                 Cqto <+ 
-                                 IDiv (rbx) <+>
-                                 move (rax, s2) <+>
-                                 move (rbx, rdx)
-             | _ -> case s2 of
-               R (2) -> code <+> move (rdx, rax) <+ 
-                                 Cqto <+ 
-                                 IDiv (s1) <+>
-                                 move (rax, rdx)
-
-             | _     -> code <+> withRDX(env, 
-                                 move (s2, rax) <+ 
-                                 Cqto <+ 
-                                 IDiv (s1) <+>
-                                 move (rax, s2))
-             esac
-             esac]
-        | "%"  -> [env, case s1 of
-               R (2) -> code <+> move (s2, rax) <+> 
-                                 move (rdx, rbx) <+ 
-                                 Cqto <+ 
-                                 IDiv (rbx) <+>
-                                 move (rdx, s2) <+> 
-                                 move (rbx, rdx)
-             | _ -> case s2 of
-               R (2) -> code <+> move (rdx, rax) <+ 
-                                 Cqto <+ 
-                                 IDiv (s1) <+>
-                                 move (rdx, rdx)
-
-             | _     -> code <+> withRDX(env, 
-                                 move (s2, rax) <+ 
-                                 Cqto <+ 
-                                 IDiv (s1) <+>
-                                 move (rdx, s2))
-             esac
-             esac]
-        | "==" -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-                                 
-        | "!=" -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-
-        | "<"  -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-
-        | "<=" -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-
-        | ">"  -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-
-        | ">=" -> [env, code <+  Binop("cmp", s1, s2) <+ 
-                                 Set (suffix(op), "%al") <+ 
-                                 Binop ("&&", L (1), rax) <+>
-                                 move (rax, s)]
-
-        | _    -> [env, code <+  Binop (op, s1, s2) <+>
-                                 move (s2, s)]
-        esac
+      | BINOP (op) -> 
+          case op of
+            "&&" ->
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+> move (L (0), rax)
+                                    <+ Binop ("cmp", rax, s1)
+                                    <+ Set ("ne", "%al")
+                                    <+> move (rax, s1)
+                                    <+> move (L (0), rax)
+                                    <+ Binop ("cmp", rax, s2)
+                                    <+ Set ("ne", "%al")
+                                    <+> move (rax, s2)
+                                    <+ Binop ("&&", s1, s2) <+> move (s2, s)]
+                esac
+              esac
+            | "!!" ->
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+> move (L (0), rax)
+                                    <+ Binop ("cmp", rax, s1)
+                                    <+ Set ("ne", "%al")
+                                    <+> move (rax, s1)
+                                    <+> move (L (0), rax)
+                                    <+ Binop ("cmp", rax, s2)
+                                    <+ Set ("ne", "%al")
+                                    <+> move (rax, s2)
+                                    <+ Binop ("!!", s1, s2) <+> move (s2, s)]
+                esac
+              esac
+            | "/" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+> move (s2, rax)
+                                    <+ Push (rdx)
+                                    <+ Cqto
+                                    <+ IDiv (s1)
+                                    <+> move (rax, s)
+                                    <+ Pop (rdx)]
+                esac
+              esac
+            | "%" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+> move (s2, rax)
+                                    <+ Push (rdx)
+                                    <+ Cqto
+                                    <+ IDiv (s1)
+                                    <+> move (rdx, s)
+                                    <+ Pop (rdx)]
+                esac
+              esac
+            | "==" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("e", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | "!=" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("ne", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | "<" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("l", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | "<=" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("le", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | ">" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("g", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | ">=" -> 
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop("cmp", s1, s2) <+ Set ("ge", "%al") <+ Binop ("&&", L (1), rax) <+> move (rax, s)]
+                esac
+              esac
+            | _ ->
+              case env.pop2 of
+                [s1, s2, env] -> case env.allocate of
+                  [s, env] -> [env, code <+ Binop (op, s1, s2) <+> move (s2, s)]
+                esac
+              esac
+          esac
       | LABEL(l) -> if isBarrier(env) then [retrieveStack(env, l), code <+ Label(l)]
                     else [env, code <+ Label(l)]
                     fi
