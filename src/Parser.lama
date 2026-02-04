@@ -34,6 +34,51 @@ fun inbr (l, p, r) {
   syntax (-l p -r)
 }
 
+fun binops (ops) {
+  fun inner (ops) {
+    case ops of 
+      {} -> failure ("cannot create an expr without any operators")
+    | op : {} -> 
+      syntax (s[op])
+    | op : tl ->  
+      syntax (s[op] | inner[tl])
+    esac
+  }
+
+  [inner (ops), fun (l, loc, r, op) {
+    fun (a) {
+      assertValue (a, Binop (op, l (Val), r (Val)), loc)
+    }
+  }]
+}
+
+-- Ostap patch
+
+fun expr (ops, grammar, groupName, baseName) {
+  case ops of
+    {} -> grammar
+  | [Left, newName, [ops, sema]] : tl  -> 
+    let grammar = expr (tl, grammar, groupName, newName) in
+
+    addEntry (grammar, groupName, After ("start", newName),
+      eta syntax (loc=pos l=$(entry (grammar, groupName, newName))
+                          op=ops
+  			                  r=$(entry (grammar, groupName, baseName)) { sema (l, loc, r, op) } |
+  							            $(entry (grammar, groupName, baseName))))
+
+  | [Right, newName, [ops, sema]] : tl -> 
+    let grammar = expr (tl, grammar, groupName, newName) in
+
+    addEntry (grammar, groupName, After ("start", newName),
+      eta syntax ($(entry (grammar, groupName, baseName)) |
+        loc=pos l=$(entry (grammar, groupName, baseName))
+                op=ops
+  			        r=$(entry (grammar, groupName, newName)) { sema (l, loc, r, op) }))
+  esac
+}
+
+-- Ostap patch end
+
 fun constructParser () {
   let g = createGrammar ("test") in
   let g = addGroup (g, "expr") in
@@ -77,35 +122,17 @@ fun constructParser () {
                     }                
                     ))
   in
-  let g = addEntry (g, "expr", After ("start", "*"), eta syntax (loc=pos l=$(entry (g, "expr", "*")) op=(s["*"] |
-                                                                                                 s["/"] |
-  									                                                                             s["%"])
-  			                                                                 r=$(entry (g, "expr", "primary")) { fun (a) { assertValue (a, Binop (op, l (Val), r (Val)), loc) } } |
-  							                                                           $(entry (g, "expr", "primary"))))
-  in
-  let g = addEntry (g, "expr", After ("start", "+"), eta syntax (loc=pos l=$(entry (g, "expr", "+")) op=(s["+"] |
-                                                                                               s["-"])
-  			                                                                 r=$(entry (g, "expr", "*")) { fun (a) { assertValue (a, Binop (op, l (Val), r (Val)), loc) } } |
-  							                                                           $(entry (g, "expr", "*"))))
-  in
-  let g = addEntry (g, "expr", After ("start", "=="), eta syntax ($(entry (g, "expr", "+")) |
-                                                        loc=pos l=$(entry (g, "expr", "+")) op=(s["=="] |
-  				 	                                                                                    s["!="] |
-                                                                                                s["<="] |
-  								  		                                                                        s["<" ] |
-  								  		                                                                        s[">="] |
-  										                                                                          s[">" ])
-  						                                                  r=$(entry (g, "expr", "+")) { fun (a) { assertValue (a, Binop (op, l (Val), r (Val)), loc) } })) 
-  in  
-  let g = addEntry (g, "expr", After ("start", "&&"), eta syntax ($(entry (g, "expr", "==")) |
-                                                        loc=pos l=$(entry (g, "expr", "==")) op=s["&&"] r=$(entry (g, "expr", "&&")) { fun (a) { assertValue (a, Binop (op, l (Val), r (Val)), loc) } }))                                                  						   
-  in
-  let g = addEntry (g, "expr", After ("start", "!!"), eta syntax ($(entry (g, "expr", "&&")) |
-                                                        loc=pos l=$(entry (g, "expr", "&&")) op=s["!!"] r=$(entry (g, "expr", "!!")) { fun (a) { assertValue (a, Binop (op, l (Val), r (Val)), loc) } }))
-  in 
-  let g = addEntry (g, "expr", After ("start", ":="), eta syntax ($(entry (g, "expr", "!!")) |
-                                                        loc=pos l=$(entry (g, "expr", "!!")) s[":="] r=$(entry (g, "expr", ":=")) { fun (a) { assertValue (a, Assn (l (Ref), r (Val)), loc) } }))
-  in
+  let g = expr ({
+      [Left,  "*",  binops ({"*", "/", "%"})],
+      [Left,  "+",  binops ({"+", "-"})],
+      [Left,  "==", binops ({"==", "!=", "<", ">", "<=", ">="})],
+      [Left,  "&&", binops ({"&&"})],
+      [Left,  "!!", binops ({"!!"})],
+      [Right, ":=", [s (":="), 
+                     fun (l, loc, r, op) {
+                       fun (a) { assertValue (a, Assn (l (Ref), r (Val)), loc) }
+                     }]]
+  }, g, "expr", "primary") in
   let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", ":=")) |
                                                        l=$(entry (g, "expr", ":=")) s[";"] r=$(entry (g, "expr", "start")) { fun (a) {Seq (l (Void), r (a))} }))
   in
