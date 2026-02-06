@@ -3,6 +3,7 @@ import Ostap;
 import Matcher;
 import Fun;
 import Ref;
+import Lexer;
 
 -- Creates an empty named grammar
 public fun createGrammar (name) {
@@ -12,7 +13,11 @@ public fun createGrammar (name) {
 public fun addGroup (grammar, name) {
   -- Check if a group with the given name exists
   let [grammarName, entries] = deref (grammar) in
-  grammar ::= [grammarName, [name, {["start", empty]}] : entries];
+  grammar ::= [grammarName, [name, {["start", syntax (s["${"] s[name] s[":"] 
+                                                      res=$(entry (grammar, name, "start"))
+                                                      s["}"] {
+    fun (a) { Ast (name, res) }
+  } ) ]}] : entries];
   grammar
 }
 
