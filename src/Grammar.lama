@@ -16,7 +16,7 @@ public fun addGroup (grammar, name) {
   grammar ::= [grammarName, [name, {["start", syntax (s["${"] s[name] s[":"] 
                                                       res=$(entry (grammar, name, "start"))
                                                       s["}"] {
-    fun (a) { Ast (name, res) }
+    fun (a) { Ast (name, res (a)) }
   } ) ]}] : entries];
   grammar
 }
