@@ -1,4 +1,4 @@
-${expr:if 3 !! 2 && 1 != 4 + 3 * 2 
+write(if 3 !! 2 && 1 != 4 + 3 * 2 
         then 4 
         else 5 
-        fi + 7}
+        fi + 7)

@@ -133,9 +133,9 @@ fun constructParser () {
                        fun (a) { assertValue (a, Assn (l (Ref), r (Val)), loc) }
                      }]]
   }, g, "expr", "primary") in
-  -- let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", ":=")) |
-  --                                                      l=$(entry (g, "expr", ":=")) s[";"] r=$(entry (g, "expr", "start")) { fun (a) {Seq (l (Void), r (a))} }))
-  -- in
+  let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", ":=")) |
+                                                       l=$(entry (g, "expr", ":=")) s[";"] r=$(entry (g, "expr", "start")) { fun (a) {Seq (l (Void), r (a))} }))
+  in
 
   syntax ($(entry (g, "expr", "start")))
 }
