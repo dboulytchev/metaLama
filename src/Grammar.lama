@@ -4,6 +4,7 @@ import Matcher;
 import Fun;
 import Ref;
 import Lexer;
+import STM;
 
 -- Creates an empty named grammar
 public fun createGrammar (name) {
@@ -16,7 +17,9 @@ public fun addGroup (grammar, name) {
   grammar ::= [grammarName, [name, {["start", syntax (s["${"] s[name] s[":"] 
                                                       res=$(entry (grammar, name, "start"))
                                                       s["}"] {
-    fun (a) { Ast (name, res (a)) }
+    fun (a) { res (a) => fun (res) {
+        Ast (name, res)
+      }}
   } ) ]}] : entries];
   grammar
 }

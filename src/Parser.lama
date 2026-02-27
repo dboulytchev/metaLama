@@ -8,16 +8,34 @@ import Matcher;
 import Ref;
 import Collection;
 import Grammar;
+import STM;
 
 -- -- Signals an error; takes an error message and location info
 public fun error (msg, loc) {
   failure ("%s at %d:%d\n", msg, loc.fst, loc.snd)
 }
 
+-- AST environment
+fun createEnv (id) {
+  fun freshName () {
+    [createEnv (id+1), sprintf ("_tmp%d", id)]
+  }
+
+  [freshName]
+}
+
+public fun emptyEnv () {
+  createEnv (0)
+}
+
+fun freshName (env) {
+  env [0] ()
+}
+
 fun assertValue (atr, v, loc) {
   case atr of
     Ref  -> error ("reference expected", loc)
-  | Void -> Ignore (v)
+  | Void -> v => fun (v) { Ignore (v) }
   | _    -> v
   esac
 }
@@ -47,7 +65,10 @@ fun binops (ops) {
 
   [inner (ops), fun (l, loc, r, op) {
     fun (a) {
-      assertValue (a, Binop (op, l (Val), r (Val)), loc)
+      assertValue (a, l (Val) =>> fun (l) {
+                      r (Val) => fun (r) {
+                        Binop (op, l, r)
+                      }}, loc)
     }
   }]
 }
@@ -82,9 +103,9 @@ fun expr (ops, grammar, groupName, baseName) {
 fun constructParser () {
   let g = createGrammar ("test") in
   let g = addGroup (g, "expr") in
-  let g = addEntry (g, "expr", After ("start", "primary"), eta syntax (loc=pos x=decimal {fun (a) { assertValue (a, Const (stringInt (x)), loc) }}             |
+  let g = addEntry (g, "expr", After ("start", "primary"), eta syntax (loc=pos x=decimal {fun (a) { assertValue (a, returnST $ Const (stringInt (x)), loc) }}             |
                                                                        x=lident  {fun (a) {
-                                                                                       case a of
+                                                                            returnST $ case a of
                                                                                          Ref  -> Ref (x)
                                                                                        | Void -> Ignore (Var (x))
                                                                                        | _    -> Var (x)
@@ -92,33 +113,34 @@ fun constructParser () {
                                                                                     }}                           |
                                                                        inbr[s("("), syntax($(entry (g, "expr", "start"))), s(")")] |
  
-                    loc=pos kRead x=inbr[s("("), lident, s(")")] { fun(a) { assertVoid(a, Read(x), loc) } } |
-                    loc=pos kWrite e=inbr[s("("), syntax($(entry (g, "expr", "start"))), s(")")] { fun(a) { assertVoid(a, Write(e(Val)), loc)} } |
-                    loc=pos kSkip {fun(a) { assertVoid(a, Skip, loc) }} |
+                    loc=pos kRead x=inbr[s("("), lident, s(")")] { fun(a) { assertVoid(a, returnST $ Read(x), loc) } } |
+                    loc=pos kWrite e=inbr[s("("), syntax($(entry (g, "expr", "start"))), s(")")] { fun(a) { assertVoid(a, e (Val) => fun (e) {
+                                                                                                                            Write (e)
+                                                                                                                          } , loc)} } |
+                    loc=pos kSkip {fun(a) { assertVoid(a, returnST $ Skip, loc) }} |
                     loc=pos kIf e=$(entry (g, "expr", "start")) 
                       kThen s1=$(entry (g, "expr", "start")) 
-                    elf=(-kElif $(entry (g, "expr", "start")) 
-                      -kThen $(entry (g, "expr", "start")))* 
-                    s2=(-kElse $(entry (g, "expr", "start")))? kFi {
-                                    fun helper (final, elf, type) {
-                                      case elf of
-                                      {} -> final
-                                      | [e, s]:elf -> If (e(Val), s(type), helper(final, elf, type))
-                                      esac
-                                    }
-                                    fun(a) { 
-                                      If(e(Val), s1(a), helper (
-                                        case s2 of
-                                          None -> assertVoid (a, Skip, loc)
-                                          | Some (s) -> s(a)
-                                        esac, 
-                                        elf, a))
-                                      }
-                                    } |
-                    loc=pos kWhile e=$(entry (g, "expr", "start")) kDo s=$(entry (g, "expr", "start")) kOd {fun(a) { assertVoid(a, While(e(Val), s(Void)), loc) }} |
-                    loc=pos kDo s=$(entry (g, "expr", "start")) kWhile e=$(entry (g, "expr", "start")) kOd {fun(a) { assertVoid(a, DoWhile(s(Void), e(Val)), loc) }} |
+                    end=$(entry (g, "expr", "endIf")) {
+                      fun (a) {
+                        e(Val) =>> fun (e) {s1(a) =>> fun (s1) {end(a) => fun (end) {If(e, s1, end)}}}
+                      }
+                    } |
+                    loc=pos kWhile e=$(entry (g, "expr", "start")) kDo s=$(entry (g, "expr", "start")) kOd {fun(a) { assertVoid(a, e (Val) =>> fun (e) {
+                                                                                                                                   s (Void) => fun (s) {    
+                                                                                                                                     While(e, s) 
+                                                                                                                                   }}, loc) }} |
+                    loc=pos kDo s=$(entry (g, "expr", "start")) kWhile e=$(entry (g, "expr", "start")) kOd {fun(a) { assertVoid(a, s (Void) =>> fun (s) {
+                                                                                                                                   e (Val) => fun (e) {    
+                                                                                                                                     DoWhile(s, e) 
+                                                                                                                                   }}, loc) }} |
                     kFor s1=$(entry (g, "expr", "start")) s[","] cond=$(entry (g, "expr", "start")) s[","] s2=$(entry (g, "expr", "start")) kDo s=$(entry (g, "expr", "start")) kOd {
-                      fun(a) {Seq(s1(Void), While (cond(Val), Seq(s(Void), s2(Void))))}
+                      fun(a) {
+                        s1 (Void) =>> fun (s1) {
+                        cond (Val) =>> fun (cond) {
+                        s (Void) =>> fun (s) {
+                        s2 (Void) => fun (s2) {
+                          Seq(s1, While (cond, Seq(s, s2)))
+                        }}}}}
                     }                
                     ))
   in
@@ -130,11 +152,29 @@ fun constructParser () {
       [Left,  "!!", binops ({"!!"})],
       [Right, ":=", [s (":="), 
                      fun (l, loc, r, op) {
-                       fun (a) { assertValue (a, Assn (l (Ref), r (Val)), loc) }
+                       fun (a) { assertValue (a, l (Ref) =>> fun (l) {
+                                                 r (Val) => fun (r) {
+                                                   Assn (l, r)
+                                                 }}, loc) }
                      }]]
   }, g, "expr", "primary") in
+  let g = addEntry (g, "expr", After ("start", "endIf"), eta syntax ( 
+                        kFi { fun (a) {
+                          assertVoid(a, returnST $ Skip, loc)
+                        }} |
+                        kElse s=$(entry (g, "expr", "start")) kFi { fun (a) {
+                          s(a)
+                        }} |
+                        kElif e=$(entry (g, "expr", "start")) kThen s=$(entry (g, "expr", "start")) end=$(entry (g, "expr", "endIf")) {
+                          fun (a) {
+                            e(Val) =>> fun (e) {s(a) =>> fun (s) {end(a) => fun (end) { If(e, s, end) }}}
+                          }
+                        })) in
   let g = addEntry (g, "expr", At ("start"), eta syntax ($(entry (g, "expr", ":=")) |
-                                                       l=$(entry (g, "expr", ":=")) s[";"] r=$(entry (g, "expr", "start")) { fun (a) {Seq (l (Void), r (a))} }))
+                                                       l=$(entry (g, "expr", ":=")) s[";"] r=$(entry (g, "expr", "start")) { fun (a) { l (Void) =>> fun (l) {
+                                                                                                                                       r (a) => fun (r) {
+                                                                                                                                         Seq (l, r)        
+                                                                                                                                       }}}}))
   in
 
   syntax ($(entry (g, "expr", "start")))
