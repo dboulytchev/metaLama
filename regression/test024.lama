@@ -1,5 +1,4 @@
-read (x);
-read (y);
+var x = read (), y = read ();
 write (x);
 write (y);
 x := y := 5;

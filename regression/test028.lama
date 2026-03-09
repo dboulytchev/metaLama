@@ -1,2 +1,4 @@
-write ((read (x); x) + (read (y); y))
+var x, y;
+
+write (read () + read ())
 
