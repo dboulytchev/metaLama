@@ -1,0 +1,66 @@
+import List;
+
+fun quotateList (items) {
+  case items of
+    {}    -> Const (0)
+  | h : t -> Sexp ("cons", {h, quotateList (t)})
+  esac
+}
+
+fun quotateLoc (loc) {
+  case loc of
+    [line, col] -> Array ({Const (line), Const (col)})
+  esac
+}
+
+fun quotatePattern (p) {
+  case p of
+    Wildcard          -> Sexp ("Wildcard", {})
+  | Named (name, pat) -> Sexp ("Named", {String (name), quotatePattern (pat)})
+  | Const (n)         -> Sexp ("Const", {Const (n)})
+  | String (s)        -> Sexp ("String", {String (s)})
+  | Sexp (c, ps)      -> Sexp ("Sexp", {String (c), quotateList (map (quotatePattern, ps))})
+  | Array (ps)        -> Sexp ("Array", {quotateList (map (quotatePattern, ps))})
+  esac
+}
+
+fun quotateBranch (br) {
+  case br of
+    [p, e] -> Array ({quotatePattern (p), quotate (e)})
+  esac
+}
+
+fun quotateDef (def) {
+  case def of
+    Var (ds)               -> Sexp ("Var", {quotateList (map (fun (name) {String (name)}, ds))})
+  | Val (ds)               -> Sexp ("Val", {quotateList (map (fun (name) {String (name)}, ds))})
+  | Fun (name, args, body) -> Sexp ("Fun", {String (name), quotateList (map (fun (a) {String (a)}, args)), quotate (body)})
+  esac
+}
+
+public fun quotate (expr) {
+  case expr of
+    Const (n)            -> Sexp ("Const", {Const (n)})
+  | String (s)           -> Sexp ("String", {String (s)})
+  | Var (x)              -> Sexp ("Var", {String (x)})
+  | Ref (x)              -> Sexp ("Ref", {String (x)})
+  | Skip                 -> Sexp ("Skip", {})
+  | Binop (op, l, r)     -> Sexp ("Binop", {String (op), quotate (l), quotate (r)})
+  | Seq (s1, s2)         -> Sexp ("Seq", {quotate (s1), quotate (s2)})
+  | If (e, s1, s2)       -> Sexp ("If", {quotate (e), quotate (s1), quotate (s2)})
+  | While (e, b)         -> Sexp ("While", {quotate (e), quotate (b)})
+  | DoWhile (b, e)       -> Sexp ("DoWhile", {quotate (b), quotate (e)})
+  | Assn (l, r)          -> Sexp ("Assn", {quotate (l), quotate (r)})
+  | Set (x, e)           -> Sexp ("Set", {String (x), quotate (e)})
+  | Ignore (e)           -> Sexp ("Ignore", {quotate (e)})
+  | Elem (e, i)          -> Sexp ("Elem", {quotate (e), quotate (i)})
+  | ElemRef (e, i)       -> Sexp ("ElemRef", {quotate (e), quotate (i)})
+  | Lambda (args, b)     -> Sexp ("Lambda", {quotateList (map (fun (a) {String (a)}, args)), quotate (b)})
+  | Sexp (s, args)       -> Sexp ("Sexp", {String (s), quotateList (map (quotate, args))})
+  | Array (es)           -> Sexp ("Array", {quotateList (map (quotate, es))})
+  | Builtin (f, args)    -> Sexp ("Builtin", {String (f), quotateList (map (quotate, args))})
+  | Call (f, args, loc)  -> Sexp ("Call", {quotate (f), quotateList (map (quotate, args)), quotateLoc (loc)})
+  | Case (x, brs, loc)   -> Sexp ("Case", {String (x), quotateList (map (quotateBranch, brs)), quotateLoc (loc)})
+  | Scope (defs, e)      -> Sexp ("Scope", {quotateList (map (quotateDef, defs)), quotate (e)})
+  esac
+}

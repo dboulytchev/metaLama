@@ -5,6 +5,7 @@ import Fun;
 import Ref;
 import Lexer;
 import STM;
+import Quotator;
 
 -- Creates an empty named grammar
 public fun createGrammar (name) {
@@ -18,7 +19,15 @@ public fun addGroup (grammar, name) {
                                                       res=$(entry (grammar, name, "start"))
                                                       s["}"] {
     fun (a) { res (a) => fun (res) {
-        Ast (name, res)
+        -- if (res.string = eval([emptyState ().enterScope
+        --                    .addFunction ("read", {}, External ("read"))
+        --                    .addFunction ("write", {"a"}, External ("write")),
+        --       createWorld ([])], res.quotate)).snd.string then
+        --   res.quotate
+        -- else
+        --   failure (sprintf ("Not the same!\nOriginal:\n%s\nEval'd:\n%s\n", res.string))
+        -- fi
+        res.quotate
       }}
   } ) ]}] : entries];
   grammar

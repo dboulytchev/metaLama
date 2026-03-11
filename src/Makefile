@@ -17,6 +17,8 @@ State.o: Lexer.o Parser.o
 
 Expr.o: State.o Builtins.o
 
+Grammar.o: Quotator.o
+
 SM.o: State.o World.o Expr.o Parser.o Lexer.o Builtins.o
 
 X86.o: SM.o Manifest.o
