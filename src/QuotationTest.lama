@@ -1,0 +1,36 @@
+import List;
+import Array;
+import Fun;
+import Ostap;
+import Parser;
+import Matcher;
+import Lexer;
+import Expr;
+import Quotator;
+import State;
+import World;
+
+fun initState () {
+  var s = emptyState ().enterScope;
+  s.addName ("read", Fun ({}, External ("read"), s.getLevel))
+   .addName ("write", Fun ({"a"}, External ("write"), s.getLevel))
+}
+
+var files = arrayList (sysargs).tl;
+
+iter (fun (infile) {
+  case parseString (syntax (parse -end), fread (infile)) of
+    Succ (prog) ->
+      var ast      = prog (Void) (emptyEnv ()) [1],
+          original = ast.string,
+          quotated = quotate (ast);
+      case eval ([initState (), createWorld ({})], quotated) of
+        [_, result] ->
+          if compare (original, result.string) != 0
+          then failure ("FAILED: %s\nexpected:\n%s\ngot:\n%s\nquotated:\n%s\n", infile, original, result.string, quotated.string)
+          fi
+      esac
+  | Fail (err, line, col) ->
+      failure ("PARSE ERROR in %s: %s at %d:%d\n", infile, err.hd, line, col)
+  esac
+}, files)

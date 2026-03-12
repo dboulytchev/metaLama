@@ -9,6 +9,9 @@ LAMAC=lamac
 all: Parser.o Lexer.o Grammar.o X86.o SM.o Manifest.o
 	$(LAMAC) -g -I . -o lama-impl Driver.lama
 
+quotation-test: Parser.o Lexer.o Grammar.o Expr.o Quotator.o
+	$(LAMAC) -g -I . -o quotation-test QuotationTest.lama
+
 Parser.o: Lexer.o Grammar.o
 
 Builtins.o: World.o
@@ -27,5 +30,5 @@ X86.o: SM.o Manifest.o
 	$(LAMAC) -g -I . -c $<
 
 clean:
-	rm -Rf *.s *.o *.i *~ *.html *.sm lama-impl
+	rm -Rf *.s *.o *.i *~ *.html *.sm lama-impl quotation-test
 

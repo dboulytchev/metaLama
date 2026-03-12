@@ -91,7 +91,7 @@ fun eval (c@[s, w], expr) {
    End *)
 
 (* Implementation *)
-fun eval (c@[s, w], expr) {
+public fun eval (c@[s, w], expr) {
   case expr of
     Scope (ds, e)     -> case eval ([foldl (fun (s, def) {
                                               case def of
