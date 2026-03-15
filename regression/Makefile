@@ -22,14 +22,15 @@ QUOTATION_TESTER=../src/quotation-test
 
 quotation_check:
 	@echo "Quotation tests: regression tests"
-	@ulimit -s -S 32768; $(QUOTATION_TESTER) test*.lama
+	@ulimit -s -S 32768; set -e; for f in test*.lama; do echo "$$f"; $(QUOTATION_TESTER) "$$f"; done
 	@echo "Quotation tests: expressions"
-	@ulimit -s -S 32768; $(QUOTATION_TESTER) expressions/generated*.lama
+	@ulimit -s -S 32768; set -e; for f in expressions/generated*.lama; do echo "$$f"; $(QUOTATION_TESTER) "$$f"; done
 	@echo "Quotation tests: deep expressions"
-	@ulimit -s -S 32768; $(QUOTATION_TESTER) deep-expressions/generated*.lama
+	@ulimit -s -S 32768; set -e; for f in deep-expressions/generated*.lama; do echo "$$f"; $(QUOTATION_TESTER) "$$f"; done
 	@echo "All quotation tests passed."
 
 clean:
 	$(RM) *.s *.i *~ $(LOGS) $(TESTS) *.run *.sm
 	make -C expressions clean
 	make -C deep-expressions clean
+	

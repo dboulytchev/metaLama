@@ -145,7 +145,7 @@ public fun eval (c@[s, w], expr) {
                          esac
   
   | Sexp    (s, args) -> case evalList (c, args) of
-                           [c, vals] -> [c, Sexp (s, listArray $ vals)]
+                          [c, vals] -> [c, makeSexp(tagHash $ s, listArray $ vals)]
                          esac                      
   | Builtin (f, args) -> case evalList (c, args) of
                            [[s, w], vals] -> case evalBuiltin (f, vals, w) of
