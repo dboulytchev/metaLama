@@ -202,15 +202,15 @@ fun eval (env, w, insns) {
           | STA             -> case st of
                                  v : (i@#val) : (a@#array) : st -> a[i] := v; [v : st, cst, s, w]
                                | v : (i@#val) : (a@#str  ) : st -> a[i] := v; [v : st, cst, s, w]
-                               | v : (i@#val) : (Sexp (_, a)) : st -> a[i] := v; [v : st, cst, s, w]
+                               | v : (i@#val) : (a@#sexp ) : st -> a[i] := v; [v : st, cst, s, w]
                                esac
           | ELEM            -> case st of
                                  (i@#val) : (a@#array) : st -> [a[i] : st, cst, s, w]
                                | (i@#val) : (a@#str)   : st -> [a[i] : st, cst, s, w]
-                               | (i@#val) : (Sexp (_, a)) : st -> [a[i] : st, cst, s, w]
+                               | (i@#val) : (a@#sexp)  : st -> [a[i] : st, cst, s, w]
                                esac
           | SEXP  (t, n)    -> case take (st, n) of
-                                 [st, a] -> [Sexp (t, listArray $ a) : st, cst, s, w]
+                                 [st, a] -> [makeSexp(tagHash $ t, listArray $ a) : st, cst, s, w]
                                esac
           | ARRAY (n)       -> case take (st, n) of
                                  [st, a] -> [listArray (a) : st, cst, s, w]
@@ -236,7 +236,7 @@ fun eval (env, w, insns) {
                                    esac
                                | Tag (t, sz) ->
                                   case st of
-                                    Sexp (t1, ss) : st -> [(compare (t, t1) == 0 && sz == ss.length) : st, cst, s, w]
+                                    (ss@#sexp) : st -> [(compare (t, tagOf (ss)) == 0 && sz == ss.length) : st, cst, s, w]
                                   | _ : st             -> [0 : st, cst, s, w]
                                   esac
                                | Array (sz) ->

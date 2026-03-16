@@ -113,9 +113,12 @@ public fun eval (c@[s, w], expr) {
                                          | Const    (n)     -> case v of #val -> n == v | _ -> false esac
                                          | String   (s)     -> case v of #str -> compare (s, v) == 0 | _ -> false esac
                                          | Sexp     (c, ps) -> case v of
-                                                                 Sexp (cc, vs) ->
-                                                                   if compare (c, cc) == 0 && ps.size == vs.length
-                                                                   then fst $ foldl (fun ([acc, i], p) {[acc && matchedBy (p, vs[i]), i+1]}, [true, 0], ps)
+                                                                 #sexp ->
+                                                                   if compare (c, tagOf (v)) == 0 && ps.size == v.length
+                                                                   then fst $ foldl (fun ([acc, i], p) {
+                                                                    [acc && matchedBy (p, v[i]), i+1]
+                                                                   }, [true, 0], ps)
+                                                                   else false
                                                                    fi
                                                                | _  -> false
                                                                esac
@@ -159,7 +162,7 @@ public fun eval (c@[s, w], expr) {
   | Elem   (e, i)  -> case evalList (c, {e, i}) of
                         [c, {ev@#array, iv@#val}] -> [c, ev[iv]]
                       | [c, {ev@#str  , iv@#val}] -> [c, ev[iv]]
-                      | [c, {Sexp (_, ev), iv@#val}] -> [c, ev[iv]]
+                      | [c, {ev@#sexp , iv@#val}] -> [c, ev[iv]]
                       esac
   | Set   (x, e)   -> case eval (c, e) of
                         [[s, w], v] -> [[s <- [x, Val (v)], w], v]
@@ -170,10 +173,10 @@ public fun eval (c@[s, w], expr) {
                       | [c, {ElemRef (w@#array, i@#val), v}] ->
                            w[i] := v;
                            [c, v]
-                      | [c, {ElemRef (w@#str, i@#val), v}] ->
+                      | [c, {ElemRef (w@#str  , i@#val), v}] ->
                            w[i] := v;
                            [c, v]
-                      | [c, {ElemRef (Sexp (_, w), i@#val), v}] ->
+                      | [c, {ElemRef (w@#sexp , i@#val), v}] ->
                            w[i] := v;
                            [c, v]
                       esac
