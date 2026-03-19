@@ -3,7 +3,7 @@ var a;
 meta "expr" : "beta" {
     var x = freshName();
     var y = freshName();
-    x
+    ${expr: 5 }
 }
 
 a := beta 20;
