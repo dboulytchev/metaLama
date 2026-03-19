@@ -9,11 +9,11 @@ import Ref;
 import Collection;
 import Grammar;
 import STM;
+import Expr;
+import State;
+import World;
+import Quotator;
 
--- -- Signals an error; takes an error message and location info
-public fun error (msg, loc) {
-  failure ("%s at %d:%d\n", msg, loc.fst, loc.snd)
-}
 
 -- AST environment
 fun createEnv (id) {
@@ -110,6 +110,7 @@ fun expandScope (defs, expr) {
     foldr (fun ([defs, expr], def) {
              case def of
                f@Fun (_, _, _) -> [f : defs, expr]
+             | Skip -> [defs, expr] 
              | Val (ds) ->
                  case expandValDefs (ds, expr) of
                    [ds, expr] -> [Val (ds) : defs, expr]
@@ -196,10 +197,10 @@ fun expr (ops, grammar, groupName, baseName) {
     let grammar = expr (tl, grammar, groupName, newName) in
 
     addEntry (grammar, groupName, After ("start", newName),
-      eta syntax ($(entry (grammar, groupName, baseName)) |
-        loc=pos l=$(entry (grammar, groupName, baseName))
-                op=ops
-  			        r=$(entry (grammar, groupName, newName)) { sema (l, loc, r, op) }))
+      eta syntax (        $(entry (grammar, groupName, baseName)) |
+                loc=pos l=$(entry (grammar, groupName, baseName))
+                        op=ops
+  			                r=$(entry (grammar, groupName, newName)) { sema (l, loc, r, op) }))
   esac
 }
 
@@ -207,8 +208,8 @@ fun expr (ops, grammar, groupName, baseName) {
 
 fun constructParser () {
   let g = createGrammar ("test") in
-  let g = addGroup (g, "expr") in
-  let g = addEntry (g, "expr", After ("start", "primary"), eta syntax (
+  addGroup (g, "expr");
+  addEntry (g, "expr", After ("start", "primary"), eta syntax (
     -- array constant
     loc=pos x=inbr[s("["), list0(syntax (e=$(entry (g, "expr", "start")) {e(Val)})), s("]")] {
       fun (a) {assertValue (a, chainST (x) => fun (x) {Array (x)}, loc)}
@@ -308,20 +309,19 @@ fun constructParser () {
 
     -- ( e )
     inbr[s ("("), syntax($(entry (g, "expr", "scopeExpr"))), s (")")] 
-    ))
-  in
+    ));
 
-  let g = addEntry (g, "expr", After ("start", "elsePart"), eta syntax (
+  addEntry (g, "expr", After ("start", "elsePart"), eta syntax (
     loc=pos {
       fun (a) {assertVoid (a, returnST $ Skip, loc)}
     }
   | -kElse $(entry (g, "expr", "scopeExpr"))
   | -kElif $(entry (g, "expr", "ifPart"))
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", After ("start", "thenPart"), eta syntax (-kThen $(entry (g, "expr", "scopeExpr")))) in
+  addEntry (g, "expr", After ("start", "thenPart"), eta syntax (-kThen $(entry (g, "expr", "scopeExpr"))));
 
-  let g = addEntry (g, "expr", After ("start", "ifPart"), eta syntax (
+  addEntry (g, "expr", After ("start", "ifPart"), eta syntax (
     cond=$(entry (g, "expr", "start")) th=$(entry (g, "expr", "thenPart")) el=$(entry (g, "expr", "elsePart")) {
       fun (a) {cond (Val) =>> fun (cond) {
                th   (a)   =>> fun (th)   {
@@ -329,9 +329,9 @@ fun constructParser () {
                  If (cond, th, el)
               }}}}
     }
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", After ("start", "pattern"), eta syntax (
+  addEntry (g, "expr", After ("start", "pattern"), eta syntax (
     c=chrlit                                                                              {Const (c[0])}                                                           |
     s=strlit                                                                              {String (s)}                                                             |
     x=decimal                                                                             {Const (stringInt (x))}                                                  |
@@ -340,15 +340,13 @@ fun constructParser () {
     a=inbr[s ("["), list0 (syntax($(entry (g, "expr", "pattern")))), s ("]")]             {Array (a)}                                                              |
     x=lident p=(-s["@"] $(entry (g, "expr", "pattern")))?                                 {case p of Some (p) -> Named (x, p) | None -> Named (x, Wildcard) esac } |
     inbr[s ("("), syntax($(entry (g, "expr", "pattern"))), s (")")]
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", After ("start", "caseBranches"), eta syntax (
+  addEntry (g, "expr", After ("start", "caseBranches"), eta syntax (
     listBy [syntax ($(entry (g, "expr", "pattern")) -s["->"] $(entry (g, "expr", "scopeExpr"))), s ("|")]
-  )) in
+  ));
 
-
-
-  let g = expr ({
+  expr ({
       [Left,  "*",  binops ({"*", "/", "%"})],
       [Left,  "+",  binops ({"+", "-"})],
       [Left,  "==", binops ({"==", "!=", "<", ">", "<=", ">="})],
@@ -361,9 +359,9 @@ fun constructParser () {
                                                    Assn (l, r)
                                                  }}, loc) }
                      }]]
-  }, g, "expr", "postfix") in
+  }, g, "expr", "postfix");
 
-  let g = addEntry (g, "expr", After ("start", "postfix"), eta syntax (
+  addEntry (g, "expr", After ("start", "postfix"), eta syntax (
     loc=pos e=$(entry (g, "expr", "primary")) ps=(i=inbr[s("["), syntax ($(entry (g, "expr", "start"))), s("]")]                              {Index (i (Val))} |
                           -s["."] kLength                                          {Length}          |
                           args=inbr[s("("), list0(syntax(e=$(entry (g, "expr", "start")) {e(Val)})), s(")")] {Call (args)})* {
@@ -398,9 +396,9 @@ fun constructParser () {
                  esac                                                                            
                }, e, ps) (a)
       }}
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", After ("start", "scopeExpr"), eta syntax (
+  addEntry (g, "expr", After ("start", "scopeExpr"), eta syntax (
     ds=$(entry (g, "expr", "definition"))* e=$(entry (g, "expr", "start"))? {
     fun (a) {
       fun (e) {
@@ -417,9 +415,9 @@ fun constructParser () {
       | _        -> returnST $ Skip
       esac)
     }}
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", After ("start", "definition"), eta syntax (
+  addEntry (g, "expr", After ("start", "definition"), eta syntax (
     kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", ":=")))? {case e of
                                                         None -> returnST $ [x, None]
                                                       | Some (e) ->
@@ -432,10 +430,36 @@ fun constructParser () {
     } |  
     kFun name=lident args=inbr[s("("), list0 (lident), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
       body (Weak) => fun (body) {Fun (name, args, body)}
+    } |
+    -- meta entry
+    s["meta"] gn=strlit s[":"] ln=strlit 
+    body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
+        addEntry (g, gn, At ("primary"), eta syntax (
+          s[ln] e=$(entry (g, gn, ":=")) {
+            fun (a) {
+              body (Weak) =>> fun (body) {
+              e (a) =>> fun (e) {
+              fun (env) {
+                var locEnv = ref (env);
+                let p = eval ([emptyState ().enterScope
+                             .addFunction ("read", {}, External ("read"))
+                             .addFunction ("write", {"a"}, External ("write"))
+                             .addFunction ("freshName", {}, Preproc (fun () {
+                               case deref (locEnv).freshName of
+                                 [locEnvNew, name] -> locEnv ::= locEnvNew; String (name)
+                               esac
+                             })),
+                createWorld ({})], body).snd in
+                [deref (locEnv), p]
+              }}}
+            }
+          }
+        ));
+        returnST $ Skip
     }
-  )) in
+  ));
 
-  let g = addEntry (g, "expr", At ("start"), eta syntax (
+  addEntry (g, "expr", At ("start"), eta syntax (
     $(entry (g, "expr", ":="))
   | s1=$(entry (g, "expr", ":=")) s[";"] s2=$(entry (g, "expr", "start")) {
      fun (a) {
@@ -445,8 +469,7 @@ fun constructParser () {
        }}
      }
    }
-  ))
-  in
+  ));
 
   syntax ($(entry (g, "expr", "scopeExpr")))
 }

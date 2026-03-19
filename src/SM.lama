@@ -7,7 +7,6 @@ import Fun;
 import Collection;
 import World;
 import State;
-import Parser;
 import Lexer;
 import Expr;
 import Builtins;

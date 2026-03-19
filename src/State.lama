@@ -3,8 +3,12 @@
 import Collection;
 import List;
 import Lexer;
-import Parser;
+-- import Parser;
 import Fun;
+
+public fun error (msg, loc) {
+  failure ("%s at %d:%d\n", msg, loc.fst, loc.snd)
+}
 
 -- State with a stack of scopes; each scope is a map from names to
 -- their kinds and values

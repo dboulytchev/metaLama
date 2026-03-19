@@ -1,0 +1,10 @@
+var a;
+
+meta "expr" : "beta" {
+    var x = freshName();
+    var y = freshName();
+    x
+}
+
+a := beta 20;
+write (a)

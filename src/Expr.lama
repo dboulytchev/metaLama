@@ -5,7 +5,7 @@ import Array;
 import State;
 import World;
 import Lexer;
-import Parser;
+-- import Parser;
 import Fun;
 import Builtins;
 
@@ -66,7 +66,7 @@ fun addNames (state, names) {
 }
 
 -- Helper function: adds a function in current scope
-fun addFunction (state, name, args, body) {
+public fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body, state.getLevel))
 }
                                         
@@ -226,6 +226,7 @@ public fun eval (c@[s, w], expr) {
                                   External (name) -> case evalBuiltin (name, vals, w) of
                                                        [a, w] -> [[s, w], a]
                                                      esac
+                                | Preproc (callback) -> [[s, w], callback ()]                     
                                 | _ ->
                                   var state = foldl (fun (s, [name, value]) {s.addName (name, Val (value))},
                                                      s.enterFunction (env),
