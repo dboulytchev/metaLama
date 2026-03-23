@@ -6,6 +6,9 @@ import Ref;
 import Lexer;
 import STM;
 import Quotator;
+import Expr;
+import State;
+import World;
 
 -- Creates an empty named grammar
 public fun createGrammar (name) {
@@ -15,13 +18,16 @@ public fun createGrammar (name) {
 public fun addGroup (grammar, name) {
   -- Check if a group with the given name exists
   let [grammarName, entries] = deref (grammar) in
-  grammar ::= [grammarName, [name, {["start", syntax (s["${"] s[name] s[":"] 
-                                                      res=$(entry (grammar, name, "start"))
-                                                      s["}"] {
-    fun (a) { res (a) => fun (res) {
-        res.quotate
-      }}
-  } ) ]}] : entries];
+  grammar ::= [grammarName, [name, {["start", syntax (
+      -- qoutation
+      s["${"] s[name] s[":"] 
+      res=$(entry (grammar, name, "start"))
+      s["}"] {
+        fun (a) { res (a) => fun (res) {
+          res.quotate
+        }}
+      })
+  ]}] : entries];
   grammar
 }
 

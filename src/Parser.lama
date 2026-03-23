@@ -307,6 +307,13 @@ fun constructParser () {
             esac}}}
       }} |
 
+    -- unqoutation
+    s["!${"] res=$(entry (g, "expr", "start")) s["}"] {
+      fun (a) { 
+        res (Val) => fun (res) { Unqoute (res) }
+      }
+    }  |
+
     -- ( e )
     inbr[s ("("), syntax($(entry (g, "expr", "scopeExpr"))), s (")")] 
     ));
@@ -418,37 +425,38 @@ fun constructParser () {
   ));
 
   addEntry (g, "expr", After ("start", "definition"), eta syntax (
-    kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", ":=")))? {case e of
+    kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", "start")))? {case e of
                                                         None -> returnST $ [x, None]
                                                       | Some (e) ->
                                                           e (Val) => fun (e) {[x, Some (e)]}
                                                       esac})] s[";"] {
       chainST (ds) => fun (ds) {Var (ds)}
     } |
-    kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", ":=")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
+    kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", "start")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
       chainST (ds) => fun (ds) {Val (ds)}
     } |  
     kFun name=lident args=inbr[s("("), list0 (lident), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
       body (Weak) => fun (body) {Fun (name, args, body)}
     } |
     -- meta entry
-    s["meta"] gn=strlit s[":"] ln=strlit 
+    s["meta"] gn=strlit s[":"] ln=strlit arg=lident
     body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
         addEntry (g, gn, At ("primary"), eta syntax (
           s[ln] e=$(entry (g, gn, ":=")) {
             fun (a) {
               body (Weak) =>> fun (body) {
-              e (a) =>> fun (e) {
+              e (Val)     =>> fun (e) {
               fun (env) {
                 var locEnv = ref (env);
                 let p = eval ([emptyState ().enterScope
                              .addFunction ("read", {}, External ("read"))
-                             .addFunction ("write", {"a"}, External ("write"))
-                             .addFunction ("freshName", {}, Preproc (fun () {
+                             .addFunction ("write", {"a"}, Preproc (fun ({a}) { printf ("%s\n", a.string) }))
+                             .addFunction ("freshName", {}, Preproc (fun (_) {
                                case deref (locEnv).freshName of
                                  [locEnvNew, name] -> locEnv ::= locEnvNew; String (name)
                                esac
-                             })),
+                             }))
+                             .addName (arg, Val (e)),
                 createWorld ({})], body).snd in
                 [deref (locEnv), p]
               }}}

@@ -62,5 +62,6 @@ public fun quotate (expr) {
   | Call (f, args, loc)  -> Sexp ("Call", {quotate (f), quotateList (map (quotate, args)), quotateLoc (loc)})
   | Case (x, brs, loc)   -> Sexp ("Case", {String (x), quotateList (map (quotateBranch, brs)), quotateLoc (loc)})
   | Scope (defs, e)      -> Sexp ("Scope", {quotateList (map (quotateDef, defs)), quotate (e)})
+  | Unqoute (e)          -> e
   esac
 }

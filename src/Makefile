@@ -20,7 +20,7 @@ State.o: Lexer.o
 
 Expr.o: State.o Builtins.o
 
-Grammar.o: Quotator.o
+Grammar.o: Quotator.o Expr.o State.o World.o
 
 SM.o: State.o World.o Expr.o Lexer.o Builtins.o
 

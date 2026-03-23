@@ -1,10 +1,8 @@
 var a;
 
-meta "expr" : "beta" {
-    var x = freshName();
-    var y = freshName();
-    ${expr: 5 }
+meta "expr" : "eta" e {
+    ${expr: fun (x) { !${e} (x) } }
 }
 
-a := beta 20;
-write (a)
+a := eta write;
+a (567)

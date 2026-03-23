@@ -218,7 +218,7 @@ public fun eval (c@[s, w], expr) {
                         case eval (c, f) of
                           [c, Closure (fargs, body, env)] -> 
                             if fargs.size != args.size
-                               then error (sprintf ("wrong number of actual parameters in function call"), loc)
+                               then error (sprintf ("wrong number of actual parameters in function call: %d != %d", fargs.size, args.size), loc)
                             fi;
                             case evalList (c, args) of
                               [[s, w], vals] ->
@@ -226,7 +226,7 @@ public fun eval (c@[s, w], expr) {
                                   External (name) -> case evalBuiltin (name, vals, w) of
                                                        [a, w] -> [[s, w], a]
                                                      esac
-                                | Preproc (callback) -> [[s, w], callback ()]                     
+                                | Preproc (callback) -> [[s, w], callback (vals)]
                                 | _ ->
                                   var state = foldl (fun (s, [name, value]) {s.addName (name, Val (value))},
                                                      s.enterFunction (env),
