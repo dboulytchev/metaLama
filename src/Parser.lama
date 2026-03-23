@@ -425,14 +425,14 @@ fun constructParser () {
   ));
 
   addEntry (g, "expr", After ("start", "definition"), eta syntax (
-    kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", "start")))? {case e of
+    kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", ":=")))? {case e of
                                                         None -> returnST $ [x, None]
                                                       | Some (e) ->
                                                           e (Val) => fun (e) {[x, Some (e)]}
                                                       esac})] s[";"] {
       chainST (ds) => fun (ds) {Var (ds)}
     } |
-    kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", "start")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
+    kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", ":=")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
       chainST (ds) => fun (ds) {Val (ds)}
     } |  
     kFun name=lident args=inbr[s("("), list0 (lident), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {

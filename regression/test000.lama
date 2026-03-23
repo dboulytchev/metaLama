@@ -5,4 +5,4 @@ meta "expr" : "eta" e {
 }
 
 a := eta write;
-a (567)
+a (5)
