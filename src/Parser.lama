@@ -245,8 +245,13 @@ fun constructParser () {
     loc=pos x=uident {fun (a) {assertValue (a, returnST $ Sexp (x, {}), loc)}} |
 
     -- Lambda-function
-    kFun args=inbr[s ("("), list0 (lident), s (")")] body=inbr[s ("{"), syntax($(entry (g, "expr", "start"))), s ("}")] {
-      fun (a) {assertValue (a, body (Weak) => fun (body) {Lambda (args, body)}, loc)}
+    kFun args=inbr[s ("("), list0 (syntax($(entry (g, "expr", "primary")))), s (")")] body=inbr[s ("{"), syntax($(entry (g, "expr", "start"))), s ("}")] {
+      fun (a) {assertValue (a, body (Weak) =>> fun (body) {
+        let args = map (fun (arg) {arg (Val)}, args) in
+        chainST (args) => fun (args) {
+          Lambda (args, body)
+        }
+      }, loc)}
     } |
 
     -- skip
@@ -435,8 +440,13 @@ fun constructParser () {
     kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", ":=")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
       chainST (ds) => fun (ds) {Val (ds)}
     } |  
-    kFun name=lident args=inbr[s("("), list0 (lident), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
-      body (Weak) => fun (body) {Fun (name, args, body)}
+    kFun name=lident args=inbr[s("("), list0 (syntax($(entry (g, "expr", "primary")))), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
+      body (Weak) =>> fun (body) {
+        let args = map (fun (arg) {arg (Val)}, args) in
+        chainST (args) => fun (args) {
+          Fun (name, args, body)
+        }
+      }
     } |
     -- meta entry
     s["meta"] gn=strlit s[":"] ln=strlit arg=lident
@@ -449,11 +459,10 @@ fun constructParser () {
               fun (env) {
                 var locEnv = ref (env);
                 let p = eval ([emptyState ().enterScope
-                             .addFunction ("read", {}, External ("read"))
                              .addFunction ("write", {"a"}, Preproc (fun ({a}) { printf ("%s\n", a.string) }))
                              .addFunction ("freshName", {}, Preproc (fun (_) {
                                case deref (locEnv).freshName of
-                                 [locEnvNew, name] -> locEnv ::= locEnvNew; String (name)
+                                 [locEnvNew, name] -> locEnv ::= locEnvNew; Var (name)
                                esac
                              }))
                              .addName (arg, Val (e)),

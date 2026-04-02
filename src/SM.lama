@@ -826,6 +826,7 @@ public fun compileSM (expr) {
     | Ref    (x)    -> [false, env, singletonBuffer (LDA (lookupVar (env, x)))]                                        
     | Const  (n)    -> [false, env, singletonBuffer (CONST (n))]    
     | Lambda (a, b) ->
+        let a = map (fun (Var (arg)) { arg }, a) in
         case env.genLambdaLabel of
           [fLab, env] -> [false, registerFunction (rememberFunction (addLambda (env, fLab), fLab, a, b), fLab), singletonBuffer (CLOSURE (fLab))]
         esac    
@@ -1122,6 +1123,7 @@ public fun compileSM (expr) {
                                                              else globalDefs
                                                              fi]
                       | Fun (name, args, body) ->
+                          let args = map (fun (Var (arg)) { arg }, args) in
                           case genFunLabel (env, name) of
                             [fLabel, env] -> [env.addFunction (name, fLabel, args.size), [fLabel, args, body] : funs, globalDefs]
                           esac

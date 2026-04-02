@@ -55,7 +55,7 @@ public fun quotate (expr) {
   | Ignore (e)           -> Sexp ("Ignore", {quotate (e)})
   | Elem (e, i)          -> Sexp ("Elem", {quotate (e), quotate (i)})
   | ElemRef (e, i)       -> Sexp ("ElemRef", {quotate (e), quotate (i)})
-  | Lambda (args, b)     -> Sexp ("Lambda", {quotateList (map (fun (a) {String (a)}, args)), quotate (b)})
+  | Lambda (args, b)     -> Sexp ("Lambda", {quotateList (map (quotate, args)), quotate (b)})
   | Sexp (s, args)       -> Sexp ("Sexp", {String (s), quotateList (map (quotate, args))})
   | Array (es)           -> Sexp ("Array", {quotateList (map (quotate, es))})
   | Builtin (f, args)    -> Sexp ("Builtin", {String (f), quotateList (map (quotate, args))})

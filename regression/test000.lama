@@ -1,7 +1,8 @@
 var a;
 
 meta "expr" : "eta" e {
-    ${expr: fun (x) { !${e} (x) } }
+    var x = freshName ();
+    ${expr: fun (!${x}) { !${e} (!${x}) } }
 }
 
 a := eta write;

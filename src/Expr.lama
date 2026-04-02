@@ -97,7 +97,8 @@ public fun eval (c@[s, w], expr) {
                                               case def of
                                                 Var (ds)               -> addNames (s, ds)
                                               | Val (ds)               -> addNames (s, ds)
-                                              | Fun (name, args, body) -> addFunction (s, name, args, body)
+                                              | Fun (name, args, body) -> let args = map (fun (Var (arg)) { arg }, args) in 
+                                                                          addFunction (s, name, args, body)
                                               esac
                                             }, s.enterScope, ds),
                                      w],
@@ -200,8 +201,8 @@ public fun eval (c@[s, w], expr) {
                       esac
   | Var   (x)        -> [c, case s.lookup (x) of
                               Val (x)       -> x
-			    | Fun (a, b, l) -> Closure (a, b, s.toEnv (l))
-			    esac]
+			                      | Fun (a, b, l) -> Closure (a, b, s.toEnv (l))
+			                      esac]
   | ElemRef (a, i)   -> case evalList (c, {a, i}) of
                           [c, {a, i}] -> [c, ElemRef (a, i)]
                         esac
@@ -213,10 +214,12 @@ public fun eval (c@[s, w], expr) {
   | Ignore (e)       -> case eval (c, e) of
                           [c, _] -> [c, 0]
                         esac			
-  | Lambda (a, b)    -> [c, Closure (a, b, s.toEnv (s.getLevel))]  
+  | Lambda (a, b)    -> let a = map (fun (Var (arg)) { arg }, a) in 
+                        [c, Closure (a, b, s.toEnv (s.getLevel))]
   | Call  (f, args, loc) ->
                         case eval (c, f) of
                           [c, Closure (fargs, body, env)] -> 
+                            -- printf ("fargs: %s\n", fargs.string);
                             if fargs.size != args.size
                                then error (sprintf ("wrong number of actual parameters in function call: %d != %d", fargs.size, args.size), loc)
                             fi;
