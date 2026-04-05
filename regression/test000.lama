@@ -1,9 +1,21 @@
-var a;
+var a, b;
 
 meta "expr" : "eta" e {
     var x = freshName ();
     ${expr: fun (!${x}) { !${e} (!${x}) } }
 }
 
+fun makeLazy (f) {
+  fun () {
+    f ()
+  } 
+}
+
+meta "expr" : "lazy" e {
+    ${expr: makeLazy (fun () { !${e} })}
+}
+
 a := eta write;
-a (5)
+b := lazy 5;
+
+a (b ())
