@@ -16,9 +16,12 @@ public fun createGrammar (name) {
 }
 
 public fun addGroup (grammar, name) {
-  -- Check if a group with the given name exists
   let [grammarName, entries] = deref (grammar) in
-  grammar ::= [grammarName, [name, {["start", syntax (
+  let exists = find (fun ([gname, _]) {gname = name}, entries) in
+  case exists of
+    Some ([_, levels]) -> grammar
+  | None ->
+    grammar ::= [grammarName, [name, {["start", syntax (
       -- qoutation
       s["${"] s[name] s[":"] 
       res=$(entry (grammar, name, "start"))
@@ -27,8 +30,9 @@ public fun addGroup (grammar, name) {
           res.quotate
         }}
       })
-  ]}] : entries];
-  grammar
+    ]}] : entries];
+    grammar
+  esac
 }
 
 public fun addEntry (grammar, group, level, expr) {
