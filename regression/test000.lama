@@ -1,6 +1,6 @@
 var a, b;
 
-meta "expr" "primary" : "eta" e {
+meta "expr" "primary" : "eta" e=metaExprVal {
     var x = freshName ();
     ${expr: fun (!${x}) { !${e} (!${x}) } }
 }
@@ -11,15 +11,15 @@ fun makeLazy (f) {
   } 
 }
 
-meta "expr" "primary" : "lazy" e {
+meta "expr" "primary" : "lazy" e=metaExprVal {
     ${expr: makeLazy (fun () { !${e} })}
 }
 
-meta "expr" "primary" : "leta" e {
+meta "expr" "primary" : "leta" e=metaExprVal {
   ${expr: lazy eta !${e}}
 }
 
-meta "expr" "definition" : "method" name args body {
+meta "expr" "definition" : "method" name=lident |> args=methodArgs |> body=methodBody {
   Fun (name, args, body)
 }
 
