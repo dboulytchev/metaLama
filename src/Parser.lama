@@ -292,8 +292,12 @@ fun compileRule (g, gn, rule) {
   case rule of
     RuleRef (parserName) ->
       mkRuleUnnamed (resolveRuleParser (g, gn, parserName))
+  | RuleToken (token) ->
+      mkRuleUnnamed (wrap (s (token)))
   | RuleBind (name, parserName) ->
       mkRuleNamed (name, resolveRuleParser (g, gn, parserName))
+  | RuleTokenBind (name, token) ->
+      mkRuleNamed (name, wrap (s (token)))
   | RuleSeq (left, right) ->
       combineRuleSeq (compileRule (g, gn, left), compileRule (g, gn, right))
   | RuleAlt (left, right) ->
@@ -372,13 +376,13 @@ fun constructParser () {
     loc=pos x=uident {fun (a) {assertValue (a, returnST $ Sexp (x, {}), loc)}} |
 
     -- Lambda-function
-    kFun args=inbr[s ("("), list0 (syntax($(entry (g, "expr", "primary")))), s (")")] body=inbr[s ("{"), syntax($(entry (g, "expr", "start"))), s ("}")] {
-      fun (a) {assertValue (a, body (Weak) =>> fun (body) {
-        let args = map (fun (arg) {arg (Val)}, args) in
-        chainST (args) => fun (args) {
+    kFun args=$(entry (g, "expr", "funArgs")) body=$(entry (g, "expr", "funBody")) {
+      fun (a) { 
+        args (Void) =>> fun (args) {
+        body (Weak) => fun (body) {
           Lambda (args, body)
-        }
-      }, loc)}
+        }}
+      }
     } |
 
     -- skip
@@ -449,6 +453,27 @@ fun constructParser () {
     -- ( e )
     inbr[s ("("), syntax($(entry (g, "expr", "scopeExpr"))), s (")")] 
     ));
+
+  addEntry (g, "expr", After ("start", "funArgs"), eta syntax (
+    args=inbr[s("("), list0 (syntax($(entry (g, "expr", "primary")))), s(")")] {
+      fun (a) {
+        let args = map (fun (arg) {arg (Val)}, args) in
+        chainST (args) => fun (args) {
+          args
+        }
+      }
+    }
+  ));
+
+  addEntry (g, "expr", After ("start", "funBody"), eta syntax (
+    body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
+      fun (a) {
+        body (Weak) => fun (body) {
+          body
+        }
+      }
+    }
+  ));
 
   addEntry (g, "expr", After ("start", "elsePart"), eta syntax (
     loc=pos {
@@ -557,21 +582,28 @@ fun constructParser () {
     }}
   ));
 
-  addEntry (g, "expr", After ("start", "ruleNamed"), eta syntax (
-    name=lident s["="] parserName=lident {
-      RuleBind (name, parserName)
-    }
+  addEntry (g, "expr", After ("start", "ruleUnnamed"), eta syntax (
+    parserName=strlit {
+      RuleRef (parserName)
+    } |
+    token=inbr[s ("s["), strlit, s ("]")] {
+      RuleToken (token)
+    } 
   ));
 
-  addEntry (g, "expr", After ("start", "ruleUnnamed"), eta syntax (
-    parserName=lident {
-      RuleRef (parserName)
+  addEntry (g, "expr", After ("start", "ruleNamed"), eta syntax (
+    name=lident s["="] parserName=strlit {
+      RuleBind (name, parserName)
+    } |
+    name=lident s["="] token=inbr[s ("s["), strlit, s ("]")] {
+      RuleTokenBind (name, token)
     }
   ));
 
   addEntry (g, "expr", After ("start", "ruleAtom"), eta syntax (
     $(entry (g, "expr", "ruleNamed")) |
-    $(entry (g, "expr", "ruleUnnamed"))
+    $(entry (g, "expr", "ruleUnnamed")) |
+    inbr[s ("("), syntax($(entry (g, "expr", "rule"))), s (")")]
   ));
 
   addEntry (g, "expr", After ("start", "ruleAnd"), eta syntax (
@@ -596,31 +628,6 @@ fun constructParser () {
     $(entry (g, "expr", "ruleOr"))
   ));
 
-  addEntry (g, "expr", After ("start", "metaExprVal"), eta syntax (
-    e=$(entry (g, "expr", ":="))
-  ));
-
-  addEntry (g, "expr", After ("start", "methodArgs"), eta syntax (
-    args=inbr[s("("), list0 (syntax($(entry (g, "expr", "primary")))), s(")")] {
-      fun (a) {
-        let args = map (fun (arg) {arg (Val)}, args) in
-        chainST (args) => fun (args) {
-          args
-        }
-      }
-    }
-  ));
-
-  addEntry (g, "expr", After ("start", "methodBody"), eta syntax (
-    body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
-      fun (a) {
-        body (Weak) => fun (body) {
-          body
-        }
-      }
-    }
-  ));
-
   addEntry (g, "expr", After ("start", "definition"), eta syntax (
     kVar ds=list[syntax (x=lident e=(-s["="] $(entry (g, "expr", ":=")))? {case e of
                                                         None -> returnST $ [x, None]
@@ -631,24 +638,24 @@ fun constructParser () {
     } |
     kVal ds=list[syntax (x=lident s["="] e=$(entry (g, "expr", ":=")) {e (Val) => fun (e) {[x, e]}})] s[";"] {
       fun (a) { chainST (ds) => fun (ds) {Val (ds)} }
-    } |  
-    kFun name=lident args=inbr[s("("), list0 (syntax($(entry (g, "expr", "primary")))), s(")")] body=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
-      fun (a) { body (Weak) =>> fun (body) {
-        let args = map (fun (arg) {arg (Val)}, args) in
-        chainST (args) => fun (args) {
+    } |
+    kFun name=lident args=$(entry (g, "expr", "funArgs")) body=$(entry (g, "expr", "funBody")) {
+      fun (a) { 
+        args (Void) =>> fun (args) {
+        body (Weak) => fun (body) {
           Fun (name, args, body)
-        }
-      }}
+        }}
+      }
     } |
     -- meta entry
     s["meta"] gn=strlit ln=strlit s[":"]
-    rn=strlit def=$(entry (g, "expr", "rule"))
+    def=$(entry (g, "expr", "rule"))
     metaBody=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
         addGroup (g, gn);
         case compileRule (g, gn, def) of
           [_, parser] ->
             addEntry (g, gn, At (ln), eta syntax (
-              s[rn] bindings=parser {
+              bindings=parser {
                 fun (a) {
                   metaBody (Weak) =>> fun (metaBody) {
                   resolveRuleBindings (bindings) =>> fun (bindings) {
