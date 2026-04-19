@@ -582,7 +582,9 @@ fun constructParser () {
     }}
   ));
 
-  addEntry (g, "expr", After ("start", "ruleUnnamed"), eta syntax (
+  addGroup (g, "syntax");
+
+  addEntry (g, "syntax", After ("start", "ruleUnnamed"), eta syntax (
     parserName=strlit {
       RuleRef (parserName)
     } |
@@ -591,7 +593,7 @@ fun constructParser () {
     } 
   ));
 
-  addEntry (g, "expr", After ("start", "ruleNamed"), eta syntax (
+  addEntry (g, "syntax", After ("start", "ruleNamed"), eta syntax (
     name=lident s["="] parserName=strlit {
       RuleBind (name, parserName)
     } |
@@ -600,14 +602,14 @@ fun constructParser () {
     }
   ));
 
-  addEntry (g, "expr", After ("start", "ruleAtom"), eta syntax (
-    $(entry (g, "expr", "ruleNamed")) |
-    $(entry (g, "expr", "ruleUnnamed")) |
-    inbr[s ("("), syntax($(entry (g, "expr", "rule"))), s (")")]
+  addEntry (g, "syntax", After ("start", "ruleAtom"), eta syntax (
+    $(entry (g, "syntax", "ruleNamed")) |
+    $(entry (g, "syntax", "ruleUnnamed")) |
+    inbr[s ("("), syntax($(entry (g, "syntax", "rule"))), s (")")]
   ));
 
-  addEntry (g, "expr", After ("start", "ruleAnd"), eta syntax (
-    l=$(entry (g, "expr", "ruleAtom")) r=(-s["|>"] $(entry (g, "expr", "ruleAnd")))? {
+  addEntry (g, "syntax", After ("start", "ruleAnd"), eta syntax (
+    l=$(entry (g, "syntax", "ruleAtom")) r=(-s["|>"] $(entry (g, "syntax", "ruleAnd")))? {
       case r of
         Some (r) -> RuleSeq (l, r)
       | None     -> l
@@ -615,8 +617,9 @@ fun constructParser () {
     }
   ));
 
-  addEntry (g, "expr", After ("start", "ruleOr"), eta syntax (
-    l=$(entry (g, "expr", "ruleAnd")) r=(-s["|"] $(entry (g, "expr", "ruleOr")))? {
+  addEntry (g, "syntax", After ("start", "ruleOr"), eta syntax (
+    l=$(entry (g, "syntax", "ruleAnd")) r=(-s["|"] $(entry (g, "syntax", "ruleOr")))? {
+
       case r of
         Some (r) -> RuleAlt (l, r)
       | None     -> l
@@ -624,8 +627,22 @@ fun constructParser () {
     }
   ));
 
-  addEntry (g, "expr", After ("start", "rule"), eta syntax (
-    $(entry (g, "expr", "ruleOr"))
+  addEntry (g, "syntax", After ("start", "rule"), eta syntax (
+    $(entry (g, "syntax", "ruleOr"))
+  ));
+
+  addGroup (g, "position");
+
+  addEntry (g, "position", At ("start"), eta syntax (
+    s["At"] lName=inbr[s ("("), strlit, s (")")] {
+      At (lName)
+    } |
+    s["Before"] s["("] target=strlit s[","] newName=strlit s[")"] {
+      Before (target, newName)
+    } |
+    s["After"] s["("] target=strlit s[","] newName=strlit s[")"] {
+      After (target, newName)
+    }
   ));
 
   addEntry (g, "expr", After ("start", "definition"), eta syntax (
@@ -648,35 +665,33 @@ fun constructParser () {
       }
     } |
     -- meta entry
-    s["meta"] gn=strlit ln=strlit s[":"]
-    def=$(entry (g, "expr", "rule"))
+    s["meta"] gn=strlit pos=$(entry (g, "position", "start")) s[":"]
+    def=$(entry (g, "syntax", "rule"))
     metaBody=inbr[s("{"), syntax($(entry (g, "expr", "scopeExpr"))), s("}")] {
         addGroup (g, gn);
-        case compileRule (g, gn, def) of
-          [_, parser] ->
-            addEntry (g, gn, At (ln), eta syntax (
-              bindings=parser {
-                fun (a) {
-                  metaBody (Weak) =>> fun (metaBody) {
-                  resolveRuleBindings (bindings) =>> fun (bindings) {
-                  fun (env) {
-                    var locEnv = ref (env);
-                    let p = eval ([addRuleBindings (
-                                     emptyState ().enterScope
-                                     .addFunction ("write", {"a"}, Preproc (fun ({a}) { printf ("%s\n", a.string) }))
-                                     .addFunction ("freshName", {}, Preproc (fun (_) {
-                                       case deref (locEnv).freshName of
-                                         [locEnvNew, name] -> locEnv ::= locEnvNew; Var (name)
-                                       esac
-                                     })),
-                                   bindings),
-                                   createWorld ({})], metaBody).snd in
-                    [deref (locEnv), p]
-                  }}}
-                }
-              }
-            ))
-        esac;
+        let [_, parser] = compileRule (g, gn, def) in
+        addEntry (g, gn, pos, eta syntax (
+          bindings=parser {
+            fun (a) {
+              metaBody (Weak) =>> fun (metaBody) {
+              resolveRuleBindings (bindings) =>> fun (bindings) {
+              fun (env) {
+                var locEnv = ref (env);
+                let p = eval ([addRuleBindings (
+                                 emptyState ().enterScope
+                                 .addFunction ("write", {"a"}, Preproc (fun ({a}) { printf ("%s\n", a.string) }))
+                                 .addFunction ("freshName", {}, Preproc (fun (_) {
+                                   case deref (locEnv).freshName of
+                                     [locEnvNew, name] -> locEnv ::= locEnvNew; Var (name)
+                                   esac
+                                 })),
+                               bindings),
+                               createWorld ({})], metaBody).snd in
+                [deref (locEnv), p]
+              }}}
+            }
+          }
+        ));
         fun (a) { returnST $ Skip }
     }
   ));
