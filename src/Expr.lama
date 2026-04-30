@@ -217,9 +217,11 @@ public fun eval (c@[s, w], expr) {
   | Lambda (a, b)    -> let a = map (fun (Var (arg)) { arg }, a) in 
                         [c, Closure (a, b, s.toEnv (s.getLevel))]
   | Call  (f, args, loc) ->
-                        case eval (c, f) of
+                        let evaled = eval (c, f) in
+                        case evaled of
                           [c, Closure (fargs, body, env)] -> 
-                            -- printf ("fargs: %s\n", fargs.string);
+                            -- printf ("f: %s\n", f.string);
+                            -- printf ("fargs: %s, args: %s\n", fargs.string, args.string);
                             if fargs.size != args.size
                                then error (sprintf ("wrong number of actual parameters in function call: %d != %d", fargs.size, args.size), loc)
                             fi;

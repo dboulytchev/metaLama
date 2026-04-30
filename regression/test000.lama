@@ -1,6 +1,6 @@
-var a, b;
+var a, c;
 
-meta "expr" At ("primary") : s["eta"] |> e=":=" {
+meta "expr" At ("primary") : s["eta"] |> e=["expr", ":="] {
     var x = freshName ();
     ${expr: fun (!${x}) { !${e} (!${x}) } }
 }
@@ -11,25 +11,80 @@ fun makeLazy (f) {
   } 
 }
 
-meta "expr" At ("primary") : s["lazy"] |> e=":=" {
+meta "expr" At ("primary") : s["lazy"] |> e=["expr", ":="] {
     ${expr: makeLazy (fun () { !${e} })}
 }
 
-meta "expr" At ("primary") : s["leta"] |> e=":=" {
+meta "expr" At ("primary") : s["leta"] |> e=["expr", ":="] {
   ${expr: lazy eta !${e}}
 }
 
-meta "expr" At ("definition") : 
-s["method"] |> 
-(name="lident" |> args="funArgs" |> body="funBody") {
+meta "oop" After ("start", "method") :
+s["method"] |>
+(name=["LEXER", "lident"] |> args=["expr", "funArgs"] |> body=["expr", "funBody"]) {
   Fun (name, args, body)
 }
 
-method mwrite (a) {
-  write (a)
+meta "expr" At ("primary") :
+s["object"] |> objArgs=["expr", "funArgs"] |> s["{"] |>
+methods=["oop", "method"]* |>
+s["}"] {
+fun map (f, xs) {
+  case xs of
+    Nil          -> Nil
+  | Cons (x, xs) -> Cons (f (x), map (f, xs))
+  esac
 }
 
-a := leta mwrite;
-b := lazy 5;
+fun foldl (f, acc, l) {
+  case l of
+    Nil     -> acc
+  | Cons (x, xs) -> foldl (f, f (acc, x), xs)
+  esac
+}
 
-a () (b ())
+fun concatLists (xs, ys) {
+  case xs of
+    Nil          -> ys
+  | Cons (x, xs) -> Cons (x, concatLists (xs, ys))
+  esac
+}
+  var methodNames, res;
+
+  foldl (fun (i, method) {
+    case method of 
+      Fun (name, args, body) -> addMetaBinding (name, Const (i))
+    esac;
+    i + 1
+  }, 0, makeConsList (methods));
+
+  methodNames := map (fun (method) {
+    case method of
+      Fun (name, args, body) -> Var (name)
+    esac
+  }, makeConsList (methods));
+
+
+  Lambda (objArgs, expandScope (methods, Array (unmakeConsList (methodNames))))
+}
+
+meta "expr" At ("primary") :
+object=["expr", ":="] |>
+s["@"] |>
+methodName=["LEXER", "lident"] |>
+methodArgs=["expr", "funArgs"]
+{  
+  var methodNum, res;
+  methodNum := lookupMetaBinding (methodName);
+  Call (${expr: !${object} [!${methodNum}]}, methodArgs, 0)
+}
+
+a := 5;
+
+c := object (name) {
+  method mwrite () {
+    write (name)
+  }
+};
+
+c (a) @ mwrite ()

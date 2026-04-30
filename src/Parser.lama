@@ -3,6 +3,7 @@
 import Ostap;
 import Lexer;
 import List;
+import Array;
 import Fun;
 import Matcher;
 import Ref;
@@ -16,20 +17,44 @@ import Quotator;
 
 
 -- AST environment
-fun createEnv (id) {
+fun createEnv (id, metaBindings) {
   fun freshName () {
-    [createEnv (id+1), sprintf ("_tmp%d", id)]
+    [createEnv (id+1, metaBindings), sprintf ("_tmp%d", id)]
   }
 
-  [freshName]
+  fun addMetaBinding (name, value) {
+    let metaBindings = 
+      case findMap (metaBindings, name) of
+        None     -> addMap (metaBindings, name, value)
+      | Some (_) -> error (sprintf ("duplicate ""%s"" metaname definition", name), getLoc (name))
+      esac in
+    createEnv (id, metaBindings)
+  }
+
+  fun lookupMetaBinding (name) {
+    case findMap (metaBindings, name) of
+      None     -> error (sprintf ("meta name ""%s"" is undefined", name), getLoc (name))
+    | Some (value) -> value
+    esac
+  }
+
+  [freshName, addMetaBinding, lookupMetaBinding]
 }
 
 public fun emptyEnv () {
-  createEnv (0)
+  createEnv (0, emptyMap (compare))
 }
 
 fun freshName (env) {
   env [0] ()
+}
+
+fun addMetaBinding (env, name, value) {
+  env [1] (name, value)
+}
+
+fun lookupMetaBinding (env, name) {
+  env [2] (name)
 }
 
 fun assertValue (atr, v, loc) {
@@ -267,6 +292,53 @@ fun combineRuleAlt (left, right) {
   esac
 }
 
+fun combineRuleOpt (rule) {
+  case [rule.fst, rule.snd] of
+    [bindings, parser] ->
+      [bindings,
+       opt (parser) @ fun (res) {
+         case res of
+           None ->
+             map (fun (name) {
+                    [name, fun (a) { returnST $ None }]
+                  },
+                  bindings)
+         | Some (res) ->
+             map (fun ([name, value]) {
+                    [name, fun (a) {
+                      value (Val) => fun (value) {
+                        Some (value)
+                      }
+                    }]
+                  },
+                  res)
+         esac
+       }]
+  esac
+}
+
+fun combineRuleRep0 (rule) {
+  case [rule.fst, rule.snd] of
+    [bindings, parser] ->
+      [bindings,
+       rep0 (parser) @ fun (reps) {
+         case
+           foldl (fun ([acc, i], name) {
+                    [acc +++ {[name, fun (a) {
+                      chainST (map (resolveRuleBindings, reps)) => fun (reps) {
+                        map (fun (rep) { rep[i].snd }, reps)
+                      }
+                    }]},
+                     i + 1]
+                  },
+                  [{}, 0],
+                  bindings) of
+           [acc, _] -> acc
+         esac
+       }]
+  esac
+}
+
 fun wrap (parser) {
   parser @ fun (x) {
     fun (a) {
@@ -275,7 +347,7 @@ fun wrap (parser) {
   }
 }
 
-fun resolveRuleParser (g, gn, parserName) {
+fun resolveLexerRuleParser (parserName) {
   case parserName of
     "lident"  -> wrap (lident)
   | "uident"  -> wrap (uident)
@@ -284,24 +356,32 @@ fun resolveRuleParser (g, gn, parserName) {
   | "decimal" -> wrap (decimal)
   | "pos"     -> wrap (pos)
   | "end"     -> wrap (end)
-  | _         -> entry (g, gn, parserName)
+  | _         -> failure (sprintf ("unknown lexer primitive ""%s""", parserName))
   esac
 }
 
 fun compileRule (g, gn, rule) {
   case rule of
-    RuleRef (parserName) ->
-      mkRuleUnnamed (resolveRuleParser (g, gn, parserName))
+    RuleRef (groupName, levelName) ->
+      mkRuleUnnamed (entry (g, groupName, levelName))
+  | RuleLexerRef (parserName) ->
+      mkRuleUnnamed (resolveLexerRuleParser (parserName))
   | RuleToken (token) ->
       mkRuleUnnamed (wrap (s (token)))
-  | RuleBind (name, parserName) ->
-      mkRuleNamed (name, resolveRuleParser (g, gn, parserName))
+  | RuleBind (name, groupName, levelName) ->
+      mkRuleNamed (name, entry (g, groupName, levelName))
+  | RuleLexerBind (name, parserName) ->
+      mkRuleNamed (name, resolveLexerRuleParser (parserName))
   | RuleTokenBind (name, token) ->
       mkRuleNamed (name, wrap (s (token)))
   | RuleSeq (left, right) ->
       combineRuleSeq (compileRule (g, gn, left), compileRule (g, gn, right))
   | RuleAlt (left, right) ->
       combineRuleAlt (compileRule (g, gn, left), compileRule (g, gn, right))
+  | RuleOpt (rule) ->
+      combineRuleOpt (compileRule (g, gn, rule))
+  | RuleRep0 (rule) ->
+      combineRuleRep0 (compileRule (g, gn, rule))
   esac
 }
 
@@ -328,6 +408,20 @@ fun chainBindingsST (xs) {
       [state, xs] -> [state, reverse (xs)]
     esac
   }
+}
+
+fun makeConsList (xs) {
+  case xs of
+    {}      -> Nil
+  | x : tl  -> Cons (x, makeConsList (tl))
+  esac
+}
+
+fun unmakeConsList (xs) {
+  case xs of
+    Nil -> {}
+  | Cons (x, tl) -> x : unmakeConsList (tl)
+  esac
 }
 
 fun resolveRuleBindings (bindings) {
@@ -585,8 +679,11 @@ fun constructParser () {
   addGroup (g, "syntax");
 
   addEntry (g, "syntax", After ("start", "ruleUnnamed"), eta syntax (
-    parserName=strlit {
-      RuleRef (parserName)
+    s["["] groupName=strlit s[","] levelName=strlit s["]"] {
+      case groupName of 
+        "LEXER" -> RuleLexerRef (levelName)
+      | _       -> RuleRef (groupName, levelName)
+      esac
     } |
     token=inbr[s ("s["), strlit, s ("]")] {
       RuleToken (token)
@@ -594,8 +691,11 @@ fun constructParser () {
   ));
 
   addEntry (g, "syntax", After ("start", "ruleNamed"), eta syntax (
-    name=lident s["="] parserName=strlit {
-      RuleBind (name, parserName)
+    name=lident s["="] s["["] groupName=strlit s[","] levelName=strlit s["]"] {
+      case groupName of 
+        "LEXER" -> RuleLexerBind (name, levelName)
+      | _       -> RuleBind (name, groupName, levelName)
+      esac
     } |
     name=lident s["="] token=inbr[s ("s["), strlit, s ("]")] {
       RuleTokenBind (name, token)
@@ -608,8 +708,18 @@ fun constructParser () {
     inbr[s ("("), syntax($(entry (g, "syntax", "rule"))), s (")")]
   ));
 
+  addEntry (g, "syntax", After ("start", "rulePostfix"), eta syntax (
+    atom=$(entry (g, "syntax", "ruleAtom")) suffix=(s["?"] { Opt } | s["*"] { Rep0 })? {
+      case suffix of
+        Some (Opt)  -> RuleOpt (atom)
+      | Some (Rep0) -> RuleRep0 (atom)
+      | None        -> atom
+      esac
+    }
+  ));
+
   addEntry (g, "syntax", After ("start", "ruleAnd"), eta syntax (
-    l=$(entry (g, "syntax", "ruleAtom")) r=(-s["|>"] $(entry (g, "syntax", "ruleAnd")))? {
+    l=$(entry (g, "syntax", "rulePostfix")) r=(-s["|>"] $(entry (g, "syntax", "ruleAnd")))? {
       case r of
         Some (r) -> RuleSeq (l, r)
       | None     -> l
@@ -684,6 +794,21 @@ fun constructParser () {
                                    case deref (locEnv).freshName of
                                      [locEnvNew, name] -> locEnv ::= locEnvNew; Var (name)
                                    esac
+                                 }))
+                                 .addFunction ("addMetaBinding", {"name", "value"}, Preproc (fun ({name, value}) {
+                                   locEnv ::= deref (locEnv).addMetaBinding (name, value)
+                                 }))
+                                 .addFunction ("lookupMetaBinding", {"name"}, Preproc (fun ({name}) {
+                                   deref (locEnv).lookupMetaBinding (name)
+                                 }))
+                                 .addFunction ("makeConsList", {"xs"}, Preproc (fun ({xs}) {
+                                   makeConsList (xs)
+                                 }))
+                                 .addFunction ("unmakeConsList", {"xs"}, Preproc (fun ({xs}) {
+                                   unmakeConsList (xs)
+                                 }))
+                                 .addFunction ("expandScope", {"ds", "expr"}, Preproc (fun ({ds, expr}) {
+                                   expandScope (ds, expr)
                                  })),
                                bindings),
                                createWorld ({})], metaBody).snd in
