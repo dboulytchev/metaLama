@@ -1,4 +1,4 @@
-var a, c;
+var a, c, d;
 
 meta "expr" At ("primary") : s["eta"] |> e=["expr", ":="] {
     var x = freshName ();
@@ -29,43 +29,108 @@ meta "expr" At ("primary") :
 s["object"] |> objArgs=["expr", "funArgs"] |> s["{"] |>
 methods=["oop", "method"]* |>
 s["}"] {
-fun map (f, xs) {
-  case xs of
-    Nil          -> Nil
-  | Cons (x, xs) -> Cons (f (x), map (f, xs))
-  esac
-}
-
-fun foldl (f, acc, l) {
-  case l of
-    Nil     -> acc
-  | Cons (x, xs) -> foldl (f, f (acc, x), xs)
-  esac
-}
-
-fun concatLists (xs, ys) {
-  case xs of
-    Nil          -> ys
-  | Cons (x, xs) -> Cons (x, concatLists (xs, ys))
-  esac
-}
-  var methodNames, res;
-
-  foldl (fun (i, method) {
-    case method of 
-      Fun (name, args, body) -> addMetaBinding (name, Const (i))
-    esac;
-    i + 1
-  }, 0, makeConsList (methods));
-
-  methodNames := map (fun (method) {
-    case method of
-      Fun (name, args, body) -> Var (name)
+  fun map (f, xs) {
+    case xs of
+      Nil          -> Nil
+    | Cons (x, xs) -> Cons (f (x), map (f, xs))
     esac
-  }, makeConsList (methods));
+  }
 
+  fun foldl (f, acc, l) {
+    case l of
+      Nil     -> acc
+    | Cons (x, xs) -> foldl (f, f (acc, x), xs)
+    esac
+  }
 
-  Lambda (objArgs, expandScope (methods, Array (unmakeConsList (methodNames))))
+  fun concatLists (xs, ys) {
+    case xs of
+      Nil          -> ys
+    | Cons (x, xs) -> Cons (x, concatLists (xs, ys))
+    esac
+  }
+
+  fun listLength (xs) {
+    case xs of
+      Nil -> 0
+    | Cons (x, xs) -> 1 + listLength (xs)
+    esac
+  }
+  
+  fun findMethodId (methods, name, arity) {
+    case methods of
+      Nil -> None
+    | Cons (Method (methodName, methodArity, id), methods) ->
+        if compare (methodName, name) == 0 && methodArity == arity
+        then Some (id)
+        else findMethodId (methods, name, arity)
+        fi
+    esac
+  }
+
+  fun registerMethod (method) {
+    case method of 
+      Fun (name, args, body) ->
+        var methodRegistry = lookupMetaBinding ("methodRegistry");
+        var arity = listLength (makeConsList (args));
+        case findMethodId (methodRegistry, name, arity) of
+          Some (id) -> id
+        | None ->
+            case lookupMetaBinding ("methodCounter") of
+              Const (id) ->
+                addMetaBinding ("methodRegistry", Cons (Method (name, arity, id), methodRegistry));
+                addMetaBinding ("methodCounter", Const (id + 1));
+                id
+            esac
+        esac
+    esac
+  }
+
+  fun methodById (id, methods) {
+    case methods of
+      Nil -> Const (0)
+    | Cons (method, methods) ->
+        case method of
+          Fun (name, args, body) ->
+            case findMethodId (lookupMetaBinding ("methodRegistry"), name, listLength (makeConsList (args))) of
+              Some (methodId) ->
+                if methodId == id
+                then Var (name)
+                else methodById (id, methods)
+                fi
+            esac
+        esac
+    esac
+  }
+
+  fun methodArray (id, count, methods) {
+    if id == count
+    then Nil
+    else Cons (methodById (id, methods), methodArray (id + 1, count, methods))
+    fi
+  }
+
+  var methodsList = makeConsList (methods), methodCount;
+
+  addMetaBinding ("methodRegistry", lookupMetaBindingOrDefault ("methodRegistry", Nil));
+  addMetaBinding ("methodCounter", lookupMetaBindingOrDefault ("methodCounter", Const (0)));
+
+  methodsList := map (fun (method) {
+    case method of
+      Fun (name, args, body) ->
+        var arity = listLength (makeConsList (args));
+        var methodNameNum = strAddNum (name, arity);
+        Fun (methodNameNum, args, body)
+    esac
+  }, methodsList);
+
+  foldl (fun (ignored, method) {registerMethod (method)}, 0, methodsList);
+
+  case lookupMetaBinding ("methodCounter") of
+    Const (count) -> methodCount := count
+  esac;
+
+  Lambda (objArgs, expandScope (unmakeConsList (methodsList), Array (unmakeConsList (methodArray (0, methodCount, methodsList)))))
 }
 
 meta "expr" At ("primary") :
@@ -74,17 +139,61 @@ s["@"] |>
 methodName=["LEXER", "lident"] |>
 methodArgs=["expr", "funArgs"]
 {  
-  var methodNum, res;
-  methodNum := lookupMetaBinding (methodName);
-  Call (${expr: !${object} [!${methodNum}]}, methodArgs, 0)
+  var arity, methodNameNum;
+  fun listLength (xs) {
+    case xs of
+      Nil -> 0
+    | Cons (x, xs) -> 1 + listLength (xs)
+    esac
+  }
+
+  fun findMethodId (methods, name, arity) {
+    case methods of
+      Nil -> None
+    | Cons (Method (methodName, methodArity, id), methods) ->
+        if compare (methodName, name) == 0 && methodArity == arity
+        then Some (id)
+        else findMethodId (methods, name, arity)
+        fi
+    esac
+  }
+
+  addMetaBinding ("methodRegistry", lookupMetaBindingOrDefault ("methodRegistry", Nil));
+  addMetaBinding ("methodCounter", lookupMetaBindingOrDefault ("methodCounter", Const (0)));
+
+  arity := listLength (makeConsList (methodArgs));
+  methodNameNum := strAddNum (methodName, arity);
+
+  case findMethodId (lookupMetaBinding ("methodRegistry"), methodNameNum, arity) of
+    Some (methodNum) ->
+      var methodNumExpr = Const (methodNum);
+      Call (${expr: !${object} [!${methodNumExpr}]}, methodArgs, 0)
+  esac
 }
 
 a := 5;
 
 c := object (name) {
+  method madd (x) {
+    write (name + x)
+  }
+
   method mwrite () {
     write (name)
   }
+
+  method mwrite (x) {
+    write (x)
+  }
 };
 
-c (a) @ mwrite ()
+d := object (name) {
+  method mwrite () {
+    write (name + 1)
+  }
+};
+
+c (a) @ mwrite ();
+c (a) @ madd (1);
+d (a) @ mwrite ();
+c (a) @ mwrite (2)

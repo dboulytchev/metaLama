@@ -23,11 +23,7 @@ fun createEnv (id, metaBindings) {
   }
 
   fun addMetaBinding (name, value) {
-    let metaBindings = 
-      case findMap (metaBindings, name) of
-        None     -> addMap (metaBindings, name, value)
-      | Some (_) -> error (sprintf ("duplicate ""%s"" metaname definition", name), getLoc (name))
-      esac in
+    let metaBindings = addMap (metaBindings, name, value) in
     createEnv (id, metaBindings)
   }
 
@@ -38,7 +34,14 @@ fun createEnv (id, metaBindings) {
     esac
   }
 
-  [freshName, addMetaBinding, lookupMetaBinding]
+  fun lookupMetaBindingOrDefault (name, value) {
+    case findMap (metaBindings, name) of
+      None         -> value
+    | Some (value) -> value
+    esac
+  }
+
+  [freshName, addMetaBinding, lookupMetaBinding, lookupMetaBindingOrDefault]
 }
 
 public fun emptyEnv () {
@@ -55,6 +58,10 @@ fun addMetaBinding (env, name, value) {
 
 fun lookupMetaBinding (env, name) {
   env [2] (name)
+}
+
+fun lookupMetaBindingOrDefault (env, name, value) {
+  env [3] (name, value)
 }
 
 fun assertValue (atr, v, loc) {
@@ -790,6 +797,7 @@ fun constructParser () {
                 let p = eval ([addRuleBindings (
                                  emptyState ().enterScope
                                  .addFunction ("write", {"a"}, Preproc (fun ({a}) { printf ("%s\n", a.string) }))
+                                 .addFunction ("compare", {"a", "b"}, Preproc (fun ({a, b}) { compare (a, b) }))
                                  .addFunction ("freshName", {}, Preproc (fun (_) {
                                    case deref (locEnv).freshName of
                                      [locEnvNew, name] -> locEnv ::= locEnvNew; Var (name)
@@ -801,6 +809,9 @@ fun constructParser () {
                                  .addFunction ("lookupMetaBinding", {"name"}, Preproc (fun ({name}) {
                                    deref (locEnv).lookupMetaBinding (name)
                                  }))
+                                 .addFunction ("lookupMetaBindingOrDefault", {"name", "value"}, Preproc (fun ({name, value}) {
+                                   deref (locEnv).lookupMetaBindingOrDefault (name, value)
+                                 }))
                                  .addFunction ("makeConsList", {"xs"}, Preproc (fun ({xs}) {
                                    makeConsList (xs)
                                  }))
@@ -809,6 +820,9 @@ fun constructParser () {
                                  }))
                                  .addFunction ("expandScope", {"ds", "expr"}, Preproc (fun ({ds, expr}) {
                                    expandScope (ds, expr)
+                                 }))
+                                 .addFunction ("strAddNum", {"a", "b"}, Preproc (fun ({a, b}) {
+                                   sprintf ("%s%d", a, b)
                                  })),
                                bindings),
                                createWorld ({})], metaBody).snd in

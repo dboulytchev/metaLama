@@ -489,7 +489,7 @@ fun epilogue (env) {
   if compare (env.currentFunction, "L$main") == 0
   then [env, singletonBuffer (Mov (ebp, esp)) <+ Pop (ebp) <+ Binop ("^", eax, eax) <+ Ret <+ metaDef]
   else case env.pop of
-         [y, env] -> [env, singletonBuffer (Mov (ebp, esp)) <+ Pop (ebp) <+ Mov (y, eax) <+> env.restClosure <+ Ret <+ metaDef]
+         [y, env] -> [env, singletonBuffer (Mov (y, eax)) <+ Mov (ebp, esp) <+ Pop (ebp) <+> env.restClosure <+ Ret <+ metaDef]
        esac
   fi
 }
@@ -507,6 +507,7 @@ fun memOpnd (opnd) {
   case opnd of
     S (_) -> true
   | M (_) -> true
+  | I (_, _) -> true
   | _     -> false
   esac
 }
